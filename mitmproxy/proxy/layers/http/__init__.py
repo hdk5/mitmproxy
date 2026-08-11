@@ -325,7 +325,7 @@ class HttpStream(layer.Layer):
             inspect.isgeneratorfunction(stream)
             or inspect.isgeneratorfunction(getattr(stream, "__call__", None))
         ):
-            chunks = yield from commands.RunInThread(stream, message_chunk).unwrap()
+            chunks = yield from commands.RunInThread(lambda: stream(message_chunk)).unwrap()
         else:
             chunks = stream(message_chunk)
 
@@ -339,6 +339,7 @@ class HttpStream(layer.Layer):
         # and also to satisfy the type checker
         class _Done:
             __slots__ = ()
+
         done = _Done()
         chunk: bytes | _Done
 
@@ -357,10 +358,10 @@ class HttpStream(layer.Layer):
                 # __iter__ is trivial here
                 iterator = iter(chunks)
             else:
-                iterator = yield from commands.RunInThread(iter, chunks).unwrap()
+                iterator = yield from commands.RunInThread(lambda: iter(chunks)).unwrap()
 
             while True:
-                chunk = yield from commands.RunInThread(next, iterator, done).unwrap()
+                chunk = yield from commands.RunInThread(lambda: next(iterator, done)).unwrap()
                 if isinstance(chunk, _Done):
                     break
                 yield from write_message_stream(chunk)

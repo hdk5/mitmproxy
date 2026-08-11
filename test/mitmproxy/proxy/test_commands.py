@@ -37,14 +37,16 @@ def test_start_hook():
 @pytest.mark.parametrize("command_cls", [commands.RunInThread, commands.Await])
 def test_command_unwrap(command_cls):
     if command_cls is commands.RunInThread:
-        command = command_cls(pow, 2, exp=3)
+        def func():
+            return pow(2, exp=3)
     else:
 
-        async def awaitable(base, exp):
+        async def afunc(base, exp):
             return pow(base, exp)
 
-        command = command_cls(awaitable(2, exp=3))
+        func = afunc(2, exp=3)
 
+    command = command_cls(func)
     generator = command.unwrap()
 
     assert next(generator) is command
@@ -52,9 +54,8 @@ def test_command_unwrap(command_cls):
         generator.send((8, None))
     assert done.value.value == 8
 
-    if command_cls is commands.RunInThread:
-        assert command.args == (2,)
-        assert command.kwargs == {"exp": 3}
+    if command_cls is commands.Await:
+        command.awaitable.close()
 
 
 @pytest.mark.parametrize("command_cls", [commands.RunInThread, commands.Await])

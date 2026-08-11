@@ -12,9 +12,7 @@ import warnings
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Generator
-from typing import Any
 from typing import Generic
-from typing import ParamSpec
 from typing import Self
 from typing import TYPE_CHECKING
 from typing import TypeVar
@@ -27,7 +25,6 @@ from mitmproxy.connection import Server
 if TYPE_CHECKING:
     import mitmproxy.proxy.layer
 
-P = ParamSpec("P")
 R = TypeVar("R")
 
 
@@ -66,20 +63,14 @@ class RequestWakeup(Command):
         self.delay = delay
 
 
-
-
-class RunInThread(Command, Generic[P, R]):
+class RunInThread(Command, Generic[R]):
     """Run a synchronous callable without blocking the proxy event loop."""
 
     blocking = True
-    function: Callable[P, R]
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
+    function: Callable[[], R]
 
-    def __init__(self, function: Callable[P, R], *args: P.args, **kwargs: P.kwargs):
+    def __init__(self, function: Callable[[], R]):
         self.function = function
-        self.args = args
-        self.kwargs = kwargs
 
     def unwrap(self) -> Generator[Self, tuple[R, None] | tuple[None, Exception], R]:
         match (yield self):

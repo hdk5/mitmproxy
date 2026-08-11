@@ -369,12 +369,12 @@ class ConnectionHandler(metaclass=abc.ABCMeta):
         if hook.blocking:
             await self.server_event(events.HookCompleted(hook))
 
-    async def run_in_thread(self, command: commands.RunInThread[..., R]) -> None:
+    async def run_in_thread(self, command: commands.RunInThread[R]) -> None:
         def run() -> tuple[R, None] | tuple[None, Exception]:
             # StopIteration cannot be raised through a Future, so exceptions
             # need to be captured before returning from the worker thread.
             try:
-                result = command.function(*command.args, **command.kwargs)
+                result = command.function()
             except Exception as e:
                 return None, e
             else:

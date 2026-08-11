@@ -132,7 +132,7 @@ async def test_run_in_thread_completion(outcome):
         def function(value, *, suffix):
             return value + suffix
 
-        command = commands.RunInThread(function, "result", suffix="!")
+        command = commands.RunInThread(lambda: function("result", suffix="!"))
     elif outcome == "exception":
 
         def function():
@@ -140,7 +140,7 @@ async def test_run_in_thread_completion(outcome):
 
         command = commands.RunInThread(function)
     else:
-        command = commands.RunInThread(next, iter(()))
+        command = commands.RunInThread(lambda: next(iter(())))
 
     await asyncio.wait_for(handler.run_in_thread(command), timeout=5)
 

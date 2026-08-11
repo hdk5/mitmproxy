@@ -551,10 +551,7 @@ async def run_message_stream(generator):
         if isinstance(command, commands.RunInThread):
             blocking.append(command)
             try:
-                result = command.function(
-                    *command.args,
-                    **command.kwargs,
-                )
+                result = command.function()
             except Exception as error:
                 reply_value = (None, error)
             else:
