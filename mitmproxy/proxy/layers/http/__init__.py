@@ -1,6 +1,10 @@
 import collections
 import enum
+import inspect
 import time
+from collections.abc import AsyncIterable
+from collections.abc import Callable
+from collections.abc import Generator
 from dataclasses import dataclass
 from functools import cached_property
 from logging import DEBUG
@@ -63,6 +67,7 @@ from mitmproxy.proxy.layers import websocket
 from mitmproxy.proxy.layers.http import _upstream_proxy
 from mitmproxy.proxy.utils import expect
 from mitmproxy.proxy.utils import ReceiveBuffer
+from mitmproxy.script.concurrent import should_run_in_thread
 from mitmproxy.utils import human
 from mitmproxy.websocket import WebSocketData
 
@@ -309,37 +314,116 @@ class HttpStream(layer.Layer):
         yield commands.Log(f"Streaming request to {self.flow.request.host}.")
         self.client_state = self.state_stream_request_body
 
+    def read_message_stream(
+        self,
+        stream: http.MessageStreamCallable,
+        message_chunk: bytes,
+        write_message_stream: Callable[[bytes], layer.CommandGenerator[None]],
+    ) -> layer.CommandGenerator[None]:
+        concurrent = should_run_in_thread(stream)
+        if concurrent and not (
+            inspect.isgeneratorfunction(stream)
+            or inspect.isgeneratorfunction(getattr(stream, "__call__", None))
+        ):
+            chunks = yield from commands.RunInThread(stream, message_chunk).unwrap()
+        else:
+            chunks = stream(message_chunk)
+
+        if inspect.isawaitable(chunks):
+            chunks = yield from commands.Await(chunks).unwrap()
+
+        # generator can't raise StopIteration per PEP 479,
+        # so we need a sentinel value to signal the end of the stream:
+        # we can't use None for this, because user-defined handlers may
+        # yield None by mistake, so we define a new class for this purpose,
+        # and also to satisfy the type checker
+        class _Done:
+            __slots__ = ()
+        done = _Done()
+        chunk: bytes | _Done
+
+        if isinstance(chunks, bytes):
+            yield from write_message_stream(chunks)
+        elif isinstance(chunks, AsyncIterable):
+            async_iterator = aiter(chunks)
+            while True:
+                try:
+                    chunk = yield from commands.Await(anext(async_iterator)).unwrap()
+                except StopAsyncIteration:
+                    break
+                yield from write_message_stream(chunk)
+        elif concurrent:
+            if isinstance(chunks, (list, tuple, Generator)):
+                # __iter__ is trivial here
+                iterator = iter(chunks)
+            else:
+                iterator = yield from commands.RunInThread(iter, chunks).unwrap()
+
+            while True:
+                chunk = yield from commands.RunInThread(next, iterator, done).unwrap()
+                if isinstance(chunk, _Done):
+                    break
+                yield from write_message_stream(chunk)
+        else:
+            for chunk in chunks:
+                yield from write_message_stream(chunk)
+
+    def read_request_stream(self, chunk: bytes) -> layer.CommandGenerator[None]:
+        assert callable(self.flow.request.stream)
+        yield from self.read_message_stream(
+            self.flow.request.stream,
+            chunk,
+            self.write_request_stream,
+        )
+
+    def write_request_stream(self, chunk: bytes) -> layer.CommandGenerator[None]:
+        if not isinstance(chunk, bytes):
+            raise TypeError(
+                f"Request.stream must yield bytes chunks, not {type(chunk).__name__}."
+            )
+        if chunk == b"":
+            return
+        if self.context.options.store_streamed_bodies:
+            self.request_body_buf += chunk
+        yield SendHttp(RequestData(self.stream_id, chunk), self.context.server)
+
+    def read_response_stream(self, chunk: bytes) -> layer.CommandGenerator[None]:
+        assert self.flow.response
+        assert callable(self.flow.response.stream)
+        yield from self.read_message_stream(
+            self.flow.response.stream,
+            chunk,
+            self.write_response_stream,
+        )
+
+    def write_response_stream(self, chunk: bytes) -> layer.CommandGenerator[None]:
+        if not isinstance(chunk, bytes):
+            raise TypeError(
+                f"Response.stream must yield bytes chunks, not {type(chunk).__name__}."
+            )
+        if chunk == b"":
+            return
+        if self.context.options.store_streamed_bodies:
+            self.response_body_buf += chunk
+        yield SendHttp(ResponseData(self.stream_id, chunk), self.context.client)
+
     @expect(RequestData, RequestTrailers, RequestEndOfMessage)
     def state_stream_request_body(
         self, event: RequestData | RequestEndOfMessage
     ) -> layer.CommandGenerator[None]:
         if isinstance(event, RequestData):
             if callable(self.flow.request.stream):
-                chunks = self.flow.request.stream(event.data)
-                if isinstance(chunks, bytes):
-                    chunks = [chunks]
+                yield from self.read_request_stream(event.data)
             else:
-                chunks = [event.data]
-            for chunk in chunks:
                 if self.context.options.store_streamed_bodies:
-                    self.request_body_buf += chunk
-                yield SendHttp(RequestData(self.stream_id, chunk), self.context.server)
+                    self.request_body_buf += event.data
+                yield SendHttp(event, self.context.server)
         elif isinstance(event, RequestTrailers):
             # we don't do anything further here, we wait for RequestEndOfMessage first to trigger the request hook.
             self.flow.request.trailers = event.trailers
         elif isinstance(event, RequestEndOfMessage):
             if callable(self.flow.request.stream):
-                chunks = self.flow.request.stream(b"")
-                if chunks == b"":
-                    chunks = []
-                elif isinstance(chunks, bytes):
-                    chunks = [chunks]
-                for chunk in chunks:
-                    if self.context.options.store_streamed_bodies:
-                        self.request_body_buf += chunk
-                    yield SendHttp(
-                        RequestData(self.stream_id, chunk), self.context.server
-                    )
+                yield from self.read_request_stream(b"")
 
             if self.context.options.store_streamed_bodies:
                 self.flow.request.data.content = bytes(self.request_body_buf)
@@ -445,31 +529,17 @@ class HttpStream(layer.Layer):
         assert self.flow.response
         if isinstance(event, ResponseData):
             if callable(self.flow.response.stream):
-                chunks = self.flow.response.stream(event.data)
-                if isinstance(chunks, bytes):
-                    chunks = [chunks]
+                yield from self.read_response_stream(event.data)
             else:
-                chunks = [event.data]
-            for chunk in chunks:
                 if self.context.options.store_streamed_bodies:
-                    self.response_body_buf += chunk
-                yield SendHttp(ResponseData(self.stream_id, chunk), self.context.client)
+                    self.response_body_buf += event.data
+                yield SendHttp(event, self.context.client)
         elif isinstance(event, ResponseTrailers):
             self.flow.response.trailers = event.trailers
             # will be sent in send_response() after the response hook.
         elif isinstance(event, ResponseEndOfMessage):
             if callable(self.flow.response.stream):
-                chunks = self.flow.response.stream(b"")
-                if chunks == b"":
-                    chunks = []
-                elif isinstance(chunks, bytes):
-                    chunks = [chunks]
-                for chunk in chunks:
-                    if self.context.options.store_streamed_bodies:
-                        self.response_body_buf += chunk
-                    yield SendHttp(
-                        ResponseData(self.stream_id, chunk), self.context.client
-                    )
+                yield from self.read_response_stream(b"")
             if self.context.options.store_streamed_bodies:
                 self.flow.response.data.content = bytes(self.response_body_buf)
                 self.response_body_buf.clear()

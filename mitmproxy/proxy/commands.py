@@ -9,7 +9,15 @@ The counterpart to commands are events.
 
 import logging
 import warnings
+from collections.abc import Awaitable
+from collections.abc import Callable
+from collections.abc import Generator
+from typing import Any
+from typing import Generic
+from typing import ParamSpec
+from typing import Self
 from typing import TYPE_CHECKING
+from typing import TypeVar
 from typing import Union
 
 import mitmproxy.hooks
@@ -18,6 +26,9 @@ from mitmproxy.connection import Server
 
 if TYPE_CHECKING:
     import mitmproxy.proxy.layer
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class Command:
@@ -53,6 +64,46 @@ class RequestWakeup(Command):
 
     def __init__(self, delay: float):
         self.delay = delay
+
+
+
+
+class RunInThread(Command, Generic[P, R]):
+    """Run a synchronous callable without blocking the proxy event loop."""
+
+    blocking = True
+    function: Callable[P, R]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+
+    def __init__(self, function: Callable[P, R], *args: P.args, **kwargs: P.kwargs):
+        self.function = function
+        self.args = args
+        self.kwargs = kwargs
+
+    def unwrap(self) -> Generator[Self, tuple[R, None] | tuple[None, Exception], R]:
+        match (yield self):
+            case result, None:
+                return result
+            case None, error:
+                raise error
+
+
+class Await(Command, Generic[R]):
+    """Await a value without blocking unrelated proxy work."""
+
+    blocking = True
+    awaitable: Awaitable[R]
+
+    def __init__(self, awaitable: Awaitable[R]):
+        self.awaitable = awaitable
+
+    def unwrap(self) -> Generator[Self, tuple[R, None] | tuple[None, Exception], R]:
+        match (yield self):
+            case result, None:
+                return result
+            case None, error:
+                raise error
 
 
 class ConnectionCommand(Command):

@@ -1,12 +1,27 @@
-"""
-This module provides a @concurrent decorator primitive to
-offload computations from mitmproxy's main master thread.
-"""
+"""Primitives for marking callbacks for worker-thread execution."""
 
 import asyncio
 import inspect
+from collections.abc import Callable
+from typing import TypeVar
 
 from mitmproxy import hooks
+
+TCallable = TypeVar("TCallable", bound=Callable[..., object])
+
+
+def run_in_thread(function: TCallable) -> TCallable:
+    """Mark a supported callback for execution in a worker thread."""
+    if inspect.iscoroutinefunction(function) or inspect.isasyncgenfunction(function):
+        raise ValueError("run_in_thread cannot be used with async functions.")
+
+    setattr(function, "__mitmproxy_run_in_thread__", True)
+    return function
+
+
+def should_run_in_thread(function: Callable[..., object]) -> bool:
+    function = getattr(function, "__func__", function)
+    return bool(getattr(function, "__mitmproxy_run_in_thread__", False))
 
 
 def concurrent(fn):
