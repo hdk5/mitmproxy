@@ -41,8 +41,4 @@ def test_command_completed():
 
 
 def test_generic_command_completed_registration():
-    assert (
-        events.command_reply_subclasses[commands.RunInThread]
-        is events.RunInThreadCompleted
-    )
     assert events.command_reply_subclasses[commands.Await] is events.AwaitCompleted

@@ -34,46 +34,32 @@ def test_start_hook():
     assert TestHook in all_hooks.values()
 
 
-@pytest.mark.parametrize("command_cls", [commands.RunInThread, commands.Await])
-def test_command_unwrap(command_cls):
-    if command_cls is commands.RunInThread:
-        def func():
-            return pow(2, exp=3)
-    else:
+def test_await_unwrap():
+    async def awaitable():
+        return 42
 
-        async def afunc(base, exp):
-            return pow(base, exp)
-
-        func = afunc(2, exp=3)
-
-    command = command_cls(func)
+    command = commands.Await(awaitable())
     generator = command.unwrap()
 
     assert next(generator) is command
     with pytest.raises(StopIteration) as done:
-        generator.send((8, None))
-    assert done.value.value == 8
+        generator.send((42, None))
+    assert done.value.value == 42
 
-    if command_cls is commands.Await:
-        command.awaitable.close()
+    command.awaitable.close()
 
 
-@pytest.mark.parametrize("command_cls", [commands.RunInThread, commands.Await])
-def test_command_unwrap_error(command_cls):
+def test_await_unwrap_error():
     error = RuntimeError("test error")
-    if command_cls is commands.RunInThread:
-        command = command_cls(lambda: None)
-    else:
 
-        async def awaitable():
-            return None
+    async def awaitable():
+        return None
 
-        command = command_cls(awaitable())
+    command = commands.Await(awaitable())
 
     generator = command.unwrap()
     assert next(generator) is command
     with pytest.raises(RuntimeError, match="test error"):
         generator.send((None, error))
 
-    if command_cls is commands.Await:
-        command.awaitable.close()
+    command.awaitable.close()

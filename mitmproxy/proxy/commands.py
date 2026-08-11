@@ -10,7 +10,6 @@ The counterpart to commands are events.
 import logging
 import warnings
 from collections.abc import Awaitable
-from collections.abc import Callable
 from collections.abc import Generator
 from typing import Generic
 from typing import Self
@@ -61,23 +60,6 @@ class RequestWakeup(Command):
 
     def __init__(self, delay: float):
         self.delay = delay
-
-
-class RunInThread(Command, Generic[R]):
-    """Run a synchronous callable without blocking the proxy event loop."""
-
-    blocking = True
-    function: Callable[[], R]
-
-    def __init__(self, function: Callable[[], R]):
-        self.function = function
-
-    def unwrap(self) -> Generator[Self, tuple[R, None] | tuple[None, Exception], R]:
-        match (yield self):
-            case result, None:
-                return result
-            case None, error:
-                raise error
 
 
 class Await(Command, Generic[R]):

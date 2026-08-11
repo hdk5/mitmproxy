@@ -19,6 +19,7 @@ from mitmproxy.proxy.events import Event
 from mitmproxy.proxy.events import HookCompleted
 from mitmproxy.proxy.events import Start
 from mitmproxy.proxy.mode_specs import ProxyMode
+from mitmproxy.script import run_in_thread
 
 
 class MockConnectionHandler(server.SimpleConnectionHandler):
@@ -34,7 +35,7 @@ class MockConnectionHandler(server.SimpleConnectionHandler):
         )
 
 
-class RunCommandLayer(layer.Layer):
+class AwaitCommandLayer(layer.Layer):
     def __init__(self, context, command):
         super().__init__(context)
         self.command = command
@@ -121,40 +122,6 @@ async def test_no_reentrancy(capsys):
     )
 
 
-@pytest.mark.parametrize("outcome", ["result", "exception", "stop_iteration"])
-async def test_run_in_thread_completion(outcome):
-    handler = MockConnectionHandler()
-    handler.server_event = mock.AsyncMock()
-    handler._drain_writers = mock.AsyncMock()
-
-    if outcome == "result":
-
-        def function(value, *, suffix):
-            return value + suffix
-
-        command = commands.RunInThread(lambda: function("result", suffix="!"))
-    elif outcome == "exception":
-
-        def function():
-            raise RuntimeError("test error")
-
-        command = commands.RunInThread(function)
-    else:
-        command = commands.RunInThread(lambda: next(iter(())))
-
-    await asyncio.wait_for(handler.run_in_thread(command), timeout=5)
-
-    completed = handler.server_event.await_args.args[0]
-    assert isinstance(completed, events.RunInThreadCompleted)
-    assert completed.command is command
-    if outcome == "result":
-        assert completed.reply == ("result!", None)
-    else:
-        assert completed.reply[0] is None
-        expected = RuntimeError if outcome == "exception" else StopIteration
-        assert isinstance(completed.reply[1], expected)
-
-
 @pytest.mark.parametrize("outcome", ["result", "exception"])
 async def test_await_completion(outcome):
     handler = MockConnectionHandler()
@@ -183,21 +150,24 @@ async def test_run_in_thread_does_not_block_other_connections():
     started = threading.Event()
     release = threading.Event()
 
+    @run_in_thread
     def blocking():
         started.set()
         release.wait()
         return "slow"
 
+    @run_in_thread
+    def fast():
+        return "fast"
+
     first = MockConnectionHandler()
     first.transports.clear()
-    first_layer = RunCommandLayer(first.layer.context, commands.RunInThread(blocking))
+    first_layer = AwaitCommandLayer(first.layer.context, commands.Await(blocking()))
     first.layer = first_layer
 
     second = MockConnectionHandler()
     second.transports.clear()
-    second_layer = RunCommandLayer(
-        second.layer.context, commands.RunInThread(lambda: "fast")
-    )
+    second_layer = AwaitCommandLayer(second.layer.context, commands.Await(fast()))
     second.layer = second_layer
 
     try:

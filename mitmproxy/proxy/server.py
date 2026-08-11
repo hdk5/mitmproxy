@@ -369,22 +369,6 @@ class ConnectionHandler(metaclass=abc.ABCMeta):
         if hook.blocking:
             await self.server_event(events.HookCompleted(hook))
 
-    async def run_in_thread(self, command: commands.RunInThread[R]) -> None:
-        def run() -> tuple[R, None] | tuple[None, Exception]:
-            # StopIteration cannot be raised through a Future, so exceptions
-            # need to be captured before returning from the worker thread.
-            try:
-                result = command.function()
-            except Exception as e:
-                return None, e
-            else:
-                return result, None
-
-        reply = await asyncio.to_thread(run)
-        async with self._drain_lock:
-            await self.server_event(events.RunInThreadCompleted(command, reply))
-            await self._drain_writers()
-
     async def await_command(self, command: commands.Await[R]) -> None:
         reply: tuple[R, None] | tuple[None, Exception]
         try:
@@ -447,15 +431,6 @@ class ConnectionHandler(metaclass=abc.ABCMeta):
                         )
                         assert task is not None
                         self.wakeup_timer.add(task)
-                    elif isinstance(command, commands.RunInThread):
-                        task = asyncio_utils.create_task(
-                            self.run_in_thread(command),
-                            name="run_in_thread",
-                            keep_ref=False,
-                            client=self.client.peername,
-                        )
-                        self.command_tasks.add(task)
-                        task.add_done_callback(self.command_tasks.discard)
                     elif isinstance(command, commands.Await):
                         task = asyncio_utils.create_task(
                             self.await_command(command),

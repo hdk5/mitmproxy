@@ -4,7 +4,6 @@ import inspect
 import time
 from collections.abc import AsyncIterable
 from collections.abc import Callable
-from collections.abc import Generator
 from dataclasses import dataclass
 from functools import cached_property
 from logging import DEBUG
@@ -67,7 +66,6 @@ from mitmproxy.proxy.layers import websocket
 from mitmproxy.proxy.layers.http import _upstream_proxy
 from mitmproxy.proxy.utils import expect
 from mitmproxy.proxy.utils import ReceiveBuffer
-from mitmproxy.script.concurrent import should_run_in_thread
 from mitmproxy.utils import human
 from mitmproxy.websocket import WebSocketData
 
@@ -320,49 +318,20 @@ class HttpStream(layer.Layer):
         message_chunk: bytes,
         write_message_stream: Callable[[bytes], layer.CommandGenerator[None]],
     ) -> layer.CommandGenerator[None]:
-        concurrent = should_run_in_thread(stream)
-        if concurrent and not (
-            inspect.isgeneratorfunction(stream)
-            or inspect.isgeneratorfunction(getattr(stream, "__call__", None))
-        ):
-            chunks = yield from commands.RunInThread(lambda: stream(message_chunk)).unwrap()
-        else:
-            chunks = stream(message_chunk)
+        chunks = stream(message_chunk)
 
         if inspect.isawaitable(chunks):
             chunks = yield from commands.Await(chunks).unwrap()
 
-        # generator can't raise StopIteration per PEP 479,
-        # so we need a sentinel value to signal the end of the stream:
-        # we can't use None for this, because user-defined handlers may
-        # yield None by mistake, so we define a new class for this purpose,
-        # and also to satisfy the type checker
-        class _Done:
-            __slots__ = ()
-
-        done = _Done()
-        chunk: bytes | _Done
-
         if isinstance(chunks, bytes):
-            yield from write_message_stream(chunks)
-        elif isinstance(chunks, AsyncIterable):
+            chunks = [chunks]
+
+        if isinstance(chunks, AsyncIterable):
             async_iterator = aiter(chunks)
             while True:
                 try:
                     chunk = yield from commands.Await(anext(async_iterator)).unwrap()
                 except StopAsyncIteration:
-                    break
-                yield from write_message_stream(chunk)
-        elif concurrent:
-            if isinstance(chunks, (list, tuple, Generator)):
-                # __iter__ is trivial here
-                iterator = iter(chunks)
-            else:
-                iterator = yield from commands.RunInThread(lambda: iter(chunks)).unwrap()
-
-            while True:
-                chunk = yield from commands.RunInThread(lambda: next(iterator, done)).unwrap()
-                if isinstance(chunk, _Done):
                     break
                 yield from write_message_stream(chunk)
         else:

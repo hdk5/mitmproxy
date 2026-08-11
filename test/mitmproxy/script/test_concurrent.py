@@ -1,11 +1,12 @@
 import asyncio
+import inspect
 import os
+import threading
 import time
 
 import pytest
 
 from mitmproxy.script.concurrent import run_in_thread
-from mitmproxy.script.concurrent import should_run_in_thread
 from mitmproxy.test import taddons
 from mitmproxy.test import tflow
 
@@ -38,22 +39,30 @@ class TestConcurrent:
             assert "decorator not supported" in caplog.text
 
 
-def test_run_in_thread_marker():
+async def test_run_in_thread_function():
+    event_loop_thread = threading.get_ident()
+
+    @run_in_thread
     def plain(value: str) -> str:
-        return value
+        assert threading.get_ident() != event_loop_thread
+        return value.upper()
 
-    assert run_in_thread(plain) is plain
-    assert should_run_in_thread(plain)
-    assert plain("value") == "value"
+    assert inspect.iscoroutinefunction(plain)
+    assert await plain("value") == "VALUE"
 
 
-def test_run_in_thread_bound_method():
-    class Transformer:
-        @run_in_thread
-        def transform(self, value: str) -> str:
-            return value
+async def test_run_in_thread_generator():
+    event_loop_thread = threading.get_ident()
 
-    assert should_run_in_thread(Transformer().transform)
+    @run_in_thread
+    def generate():
+        assert threading.get_ident() != event_loop_thread
+        yield "one"
+        assert threading.get_ident() != event_loop_thread
+        yield "two"
+
+    assert inspect.isasyncgenfunction(generate)
+    assert [item async for item in generate()] == ["one", "two"]
 
 
 @pytest.mark.parametrize("kind", ["coroutine", "async_generator"])

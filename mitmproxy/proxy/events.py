@@ -120,12 +120,6 @@ class HookCompleted(CommandCompleted):
 
 
 @dataclass(repr=False)
-class RunInThreadCompleted(CommandCompleted, Generic[R]):
-    command: commands.RunInThread[R]
-    reply: tuple[R, None] | tuple[None, Exception]
-
-
-@dataclass(repr=False)
 class AwaitCompleted(CommandCompleted, Generic[R]):
     command: commands.Await[R]
     reply: tuple[R, None] | tuple[None, Exception]

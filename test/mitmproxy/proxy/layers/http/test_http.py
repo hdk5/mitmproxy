@@ -548,15 +548,7 @@ async def run_message_stream(generator):
             return emitted, blocking
 
         reply_value = None
-        if isinstance(command, commands.RunInThread):
-            blocking.append(command)
-            try:
-                result = command.function()
-            except Exception as error:
-                reply_value = (None, error)
-            else:
-                reply_value = (result, None)
-        elif isinstance(command, commands.Await):
+        if isinstance(command, commands.Await):
             blocking.append(command)
             try:
                 result = await command.awaitable
@@ -571,15 +563,35 @@ async def run_message_stream(generator):
 @pytest.mark.parametrize("direction", ["request", "response"])
 @pytest.mark.parametrize(
     "style",
-    ["sync", "threaded", "threaded_generator", "async", "async_generator"],
+    [
+        "sync_bytes",
+        "sync_list",
+        "threaded_bytes",
+        "threaded_list",
+        "threaded_generator",
+        "async_bytes",
+        "async_list",
+        "async_generator",
+    ],
 )
 async def test_message_stream_transformers(tctx, direction, style):
-    if style == "sync":
+    if style == "sync_bytes":
+
+        def transform(chunk):
+            return b"[" + chunk + b"]"
+    
+    elif style == "sync_list":
 
         def transform(chunk):
             return [b"[", chunk, b"]"]
 
-    elif style == "threaded":
+    elif style == "threaded_bytes":
+
+        @run_in_thread
+        def transform(chunk):
+            return b"[" + chunk + b"]"
+
+    elif style == "threaded_list":
 
         @run_in_thread
         def transform(chunk):
@@ -593,7 +605,12 @@ async def test_message_stream_transformers(tctx, direction, style):
             yield chunk
             yield b"]"
 
-    elif style == "async":
+    elif style == "async_bytes":
+
+        async def transform(chunk):
+            return b"[" + chunk + b"]"
+
+    elif style == "async_list":
 
         async def transform(chunk):
             return [b"[", chunk, b"]"]
@@ -621,12 +638,10 @@ async def test_message_stream_transformers(tctx, direction, style):
 
     emitted, blocking = await run_message_stream(generator)
 
-    assert [command.event.data for command in emitted] == [b"[", b"body", b"]"]
+    expected_chunks = [b"[body]"] if style.endswith("bytes") else [b"[", b"body", b"]"]
+    assert [command.event.data for command in emitted] == expected_chunks
     assert all(command.connection is expected_connection for command in emitted)
-    if style.startswith("threaded"):
-        assert blocking
-        assert all(isinstance(command, commands.RunInThread) for command in blocking)
-    elif style.startswith("async"):
+    if style.startswith(("threaded", "async")):
         assert blocking
         assert all(isinstance(command, commands.Await) for command in blocking)
     else:
