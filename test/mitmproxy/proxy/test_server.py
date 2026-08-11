@@ -1,6 +1,7 @@
 import asyncio
 import collections
 import textwrap
+import threading
 from dataclasses import dataclass
 from typing import Callable
 from unittest import mock
@@ -10,6 +11,7 @@ import pytest
 from mitmproxy import options
 from mitmproxy.connection import Server
 from mitmproxy.proxy import commands
+from mitmproxy.proxy import events
 from mitmproxy.proxy import layer
 from mitmproxy.proxy import server
 from mitmproxy.proxy import server_hooks
@@ -30,6 +32,19 @@ class MockConnectionHandler(server.SimpleConnectionHandler):
             mode=ProxyMode.parse("regular"),
             hook_handlers=collections.defaultdict(lambda: mock.Mock()),
         )
+
+
+class RunCommandLayer(layer.Layer):
+    def __init__(self, context, command):
+        super().__init__(context)
+        self.command = command
+        self.completed = asyncio.Event()
+        self.result = None
+
+    def _handle_event(self, event: Event) -> layer.CommandGenerator[None]:
+        if isinstance(event, Start):
+            self.result = yield from self.command.unwrap()
+            self.completed.set()
 
 
 @pytest.mark.parametrize("result", ("success", "killed", "failed"))
@@ -104,3 +119,100 @@ async def test_no_reentrancy(capsys):
         Hook completed (must not happen before start is completed).
         """
     )
+
+
+@pytest.mark.parametrize("outcome", ["result", "exception", "stop_iteration"])
+async def test_run_in_thread_completion(outcome):
+    handler = MockConnectionHandler()
+    handler.server_event = mock.AsyncMock()
+    handler._drain_writers = mock.AsyncMock()
+
+    if outcome == "result":
+
+        def function(value, *, suffix):
+            return value + suffix
+
+        command = commands.RunInThread(function, "result", suffix="!")
+    elif outcome == "exception":
+
+        def function():
+            raise RuntimeError("test error")
+
+        command = commands.RunInThread(function)
+    else:
+        command = commands.RunInThread(next, iter(()))
+
+    await asyncio.wait_for(handler.run_in_thread(command), timeout=5)
+
+    completed = handler.server_event.await_args.args[0]
+    assert isinstance(completed, events.RunInThreadCompleted)
+    assert completed.command is command
+    if outcome == "result":
+        assert completed.reply == ("result!", None)
+    else:
+        assert completed.reply[0] is None
+        expected = RuntimeError if outcome == "exception" else StopIteration
+        assert isinstance(completed.reply[1], expected)
+
+
+@pytest.mark.parametrize("outcome", ["result", "exception"])
+async def test_await_completion(outcome):
+    handler = MockConnectionHandler()
+    handler.server_event = mock.AsyncMock()
+    handler._drain_writers = mock.AsyncMock()
+
+    async def awaitable():
+        if outcome == "exception":
+            raise RuntimeError("test error")
+        return "result"
+
+    command = commands.Await(awaitable())
+    await handler.await_command(command)
+
+    completed = handler.server_event.await_args.args[0]
+    assert isinstance(completed, events.AwaitCompleted)
+    assert completed.command is command
+    if outcome == "result":
+        assert completed.reply == ("result", None)
+    else:
+        assert completed.reply[0] is None
+        assert isinstance(completed.reply[1], RuntimeError)
+
+
+async def test_run_in_thread_does_not_block_other_connections():
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking():
+        started.set()
+        release.wait()
+        return "slow"
+
+    first = MockConnectionHandler()
+    first.transports.clear()
+    first_layer = RunCommandLayer(first.layer.context, commands.RunInThread(blocking))
+    first.layer = first_layer
+
+    second = MockConnectionHandler()
+    second.transports.clear()
+    second_layer = RunCommandLayer(
+        second.layer.context, commands.RunInThread(lambda: "fast")
+    )
+    second.layer = second_layer
+
+    try:
+        await first.server_event(Start())
+        async with asyncio.timeout(5):
+            while not started.is_set():
+                await asyncio.sleep(0.01)
+
+        await second.server_event(Start())
+        await asyncio.wait_for(second_layer.completed.wait(), timeout=5)
+
+        assert second_layer.result == "fast"
+        assert not first_layer.completed.is_set()
+    finally:
+        release.set()
+
+    await asyncio.wait_for(first_layer.completed.wait(), timeout=5)
+    assert first_layer.result == "slow"
