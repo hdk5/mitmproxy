@@ -1,7 +1,6 @@
 import struct
 import time
 from dataclasses import dataclass
-from typing import List
 from typing import Literal
 
 from mitmproxy import dns
@@ -109,8 +108,8 @@ class DNSLayer(layer.Layer):
             pack_message(servfail, flow.client_conn.transport_protocol),
         )
 
-    def unpack_message(self, data: bytes, from_client: bool) -> List[dns.DNSMessage]:
-        msgs: List[dns.DNSMessage] = []
+    def unpack_message(self, data: bytes, from_client: bool) -> list[dns.DNSMessage]:
+        msgs: list[dns.DNSMessage] = []
 
         buf = self.req_buf if from_client else self.resp_buf
 
@@ -151,7 +150,7 @@ class DNSLayer(layer.Layer):
         from_client = event.connection is self.context.client
 
         if isinstance(event, events.DataReceived):
-            msgs: List[dns.DNSMessage] = []
+            msgs: list[dns.DNSMessage] = []
             try:
                 msgs = self.unpack_message(event.data, from_client)
             except struct.error as e:

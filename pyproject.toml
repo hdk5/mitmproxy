@@ -257,9 +257,16 @@ ignore_errors = true
 
 [tool.ruff]
 extend-exclude = ["mitmproxy/contrib/"]
+target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "TID251"]
+select = [
+    "E",
+    "F",
+    "I",
+    "TID251",
+    "UP006",
+]
 ignore = ["F541", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
