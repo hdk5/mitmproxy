@@ -26,11 +26,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
 from typing import ClassVar
-from typing import Generic
 from typing import get_args
 from typing import Self
 from typing import TYPE_CHECKING
-from typing import TypeVar
 
 import mitmproxy_rs
 from mitmproxy import ctx
@@ -70,9 +68,6 @@ class ProxyConnectionHandler(server.LiveConnectionHandler):
                 await data.wait_for_resume()  # pragma: no cover
 
 
-M = TypeVar("M", bound=mode_specs.ProxyMode)
-
-
 class ServerManager(typing.Protocol):
     # temporary workaround: for UDP, we use the 4-tuple because we don't have a uuid.
     connections: dict[tuple | str, ProxyConnectionHandler]
@@ -83,7 +78,7 @@ class ServerManager(typing.Protocol):
     ): ...  # pragma: no cover
 
 
-class ServerInstance(Generic[M], metaclass=ABCMeta):
+class ServerInstance[M: mode_specs.ProxyMode](metaclass=ABCMeta):
     __modes: ClassVar[dict[str, type[ServerInstance]]] = {}
 
     last_exception: Exception | None = None
@@ -94,9 +89,9 @@ class ServerInstance(Generic[M], metaclass=ABCMeta):
 
     def __init_subclass__(cls, **kwargs):
         """Register all subclasses so that make() finds them."""
-        # extract mode from Generic[Mode].
+        # Extract the mode type argument from ServerInstance[Mode].
         mode = get_args(cls.__orig_bases__[0])[0]  # type: ignore
-        if not isinstance(mode, TypeVar):
+        if not isinstance(mode, typing.TypeVar):
             assert issubclass(mode, mode_specs.ProxyMode)
             assert mode.type_name not in ServerInstance.__modes
             ServerInstance.__modes[mode.type_name] = cls
@@ -214,7 +209,9 @@ class ServerInstance(Generic[M], metaclass=ABCMeta):
             await handler.handle_client()
 
 
-class AsyncioServerInstance(ServerInstance[M], metaclass=ABCMeta):
+class AsyncioServerInstance[M: mode_specs.ProxyMode](
+    ServerInstance[M], metaclass=ABCMeta
+):
     _servers: list[
         asyncio.Server
         | mitmproxy_rs.udp.UdpServer

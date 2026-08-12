@@ -40,10 +40,8 @@ import sys
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import Sequence
-from typing import AnyStr
 from typing import cast
 from typing import ClassVar
-from typing import Generic
 from typing import Protocol
 
 import pyparsing as pp
@@ -215,7 +213,7 @@ class FAll(_Action):
         return "all flows"
 
 
-class _Rex(Generic[AnyStr], _Action, ABC):
+class _Rex[AnyStr: (str, bytes)](_Action, ABC):
     flags: ClassVar[re.RegexFlag] = re.RegexFlag.NOFLAG
 
     expr: str

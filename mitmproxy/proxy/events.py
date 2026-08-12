@@ -9,8 +9,6 @@ import warnings
 from dataclasses import dataclass
 from dataclasses import is_dataclass
 from typing import Any
-from typing import Generic
-from typing import TypeVar
 
 from mitmproxy import flow
 from mitmproxy.connection import Connection
@@ -116,11 +114,8 @@ class HookCompleted(CommandCompleted):
     reply: None = None
 
 
-T = TypeVar("T")
-
-
 @dataclass
-class MessageInjected(Event, Generic[T]):
+class MessageInjected[T](Event):
     """
     The user has injected a custom WebSocket/TCP/... message.
     """

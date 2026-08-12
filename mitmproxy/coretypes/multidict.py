@@ -5,15 +5,11 @@ from abc import abstractmethod
 from collections.abc import Iterator
 from collections.abc import MutableMapping
 from collections.abc import Sequence
-from typing import TypeVar
 
 from mitmproxy.coretypes import serializable
 
-KT = TypeVar("KT")
-VT = TypeVar("VT")
 
-
-class _MultiDict(MutableMapping[KT, VT], metaclass=ABCMeta):
+class _MultiDict[KT, VT](MutableMapping[KT, VT], metaclass=ABCMeta):
     """
     A MultiDict is a dictionary-like data structure that supports multiple values per key.
     """
@@ -147,7 +143,7 @@ class _MultiDict(MutableMapping[KT, VT], metaclass=ABCMeta):
             return super().items()
 
 
-class MultiDict(_MultiDict[KT, VT], serializable.Serializable):
+class MultiDict[KT, VT](_MultiDict[KT, VT], serializable.Serializable):
     """A concrete MultiDict, storing its own data."""
 
     def __init__(self, fields=()):
@@ -173,7 +169,7 @@ class MultiDict(_MultiDict[KT, VT], serializable.Serializable):
         return cls(state)
 
 
-class MultiDictView(_MultiDict[KT, VT]):
+class MultiDictView[KT, VT](_MultiDict[KT, VT]):
     """
     The MultiDictView provides the MultiDict interface over calculated data.
     The view itself contains no state - data is retrieved from the parent on

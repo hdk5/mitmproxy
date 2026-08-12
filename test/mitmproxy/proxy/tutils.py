@@ -8,8 +8,6 @@ import traceback
 from collections.abc import Callable
 from collections.abc import Iterable
 from typing import Any
-from typing import AnyStr
-from typing import Generic
 from typing import TypeVar
 
 from mitmproxy.connection import ConnectionState
@@ -361,7 +359,7 @@ class reply(events.Event):
 T = TypeVar("T")
 
 
-class _Placeholder(Generic[T]):
+class _Placeholder[T]:
     """
     Placeholder value in playbooks, so that objects (flows in particular) can be referenced before
     they are known. Example:
@@ -405,7 +403,7 @@ def Placeholder(cls: type[T] = Any) -> T | _Placeholder[T]:
     return _Placeholder(cls)
 
 
-class _AnyStrPlaceholder(_Placeholder[AnyStr]):
+class _AnyStrPlaceholder[AnyStr: (str, bytes)](_Placeholder[AnyStr]):
     def __init__(self, match: AnyStr):
         super().__init__(type(match))
         self._match = match

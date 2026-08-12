@@ -17,7 +17,6 @@ from collections.abc import Awaitable
 from collections.abc import Callable
 from typing import Any
 from typing import cast
-from typing import Generic
 from typing import ParamSpec
 from typing import TypeVar
 
@@ -65,7 +64,7 @@ class _SignalMixin:
             self.receivers = [r for r in self.receivers if r() is not None]
 
 
-class _SyncSignal(Generic[P], _SignalMixin):
+class _SyncSignal[**P](_SignalMixin):
     def connect(self, receiver: Callable[P, None]) -> None:
         assert not inspect.iscoroutinefunction(receiver)
         super().connect(receiver)
@@ -78,7 +77,7 @@ class _SyncSignal(Generic[P], _SignalMixin):
             assert ret is None or not inspect.isawaitable(ret)
 
 
-class _AsyncSignal(Generic[P], _SignalMixin):
+class _AsyncSignal[**P](_SignalMixin):
     def connect(self, receiver: Callable[P, Awaitable[None] | None]) -> None:
         super().connect(receiver)
 
