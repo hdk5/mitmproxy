@@ -1,8 +1,8 @@
 import asyncio
 import collections
 import textwrap
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 from unittest import mock
 
 import pytest

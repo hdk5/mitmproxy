@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import typing
-from typing import Iterator
+from collections.abc import Iterator
 
 from mitmproxy import contentviews
 from mitmproxy.contentviews import SyntaxHighlight

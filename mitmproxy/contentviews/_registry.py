@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-import typing
+from collections.abc import Iterator
 from collections.abc import Mapping
 
 from ..utils import signals
@@ -63,7 +63,7 @@ class ContentviewRegistry(Mapping[str, Contentview]):
         assert max_prio, "At least one view needs to have a working `render_priority`."
         return max_prio[1]
 
-    def __iter__(self) -> typing.Iterator[str]:
+    def __iter__(self) -> Iterator[str]:
         return iter(self._by_name)
 
     def __getitem__(self, item: str) -> Contentview:
