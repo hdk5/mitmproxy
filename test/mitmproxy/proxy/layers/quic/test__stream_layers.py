@@ -4,7 +4,6 @@ from logging import DEBUG
 from logging import ERROR
 from logging import WARNING
 from typing import Literal
-from typing import TypeVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -44,9 +43,6 @@ from mitmproxy.utils import data
 from test.mitmproxy.proxy import tutils
 
 tdata = data.Data("test")
-
-
-T = TypeVar("T", bound=layer.Layer)
 
 
 class DummyLayer(layer.Layer):
@@ -452,7 +448,7 @@ def _test_echo(
         raise AssertionError()
 
 
-def finish_handshake(
+def finish_handshake[T: layer.Layer](
     playbook: tutils.Playbook,
     conn: connection.Connection,
     tssl: SSLTest,

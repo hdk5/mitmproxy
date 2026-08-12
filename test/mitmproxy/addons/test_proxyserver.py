@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 from typing import ClassVar
-from typing import TypeVar
 from unittest.mock import Mock
 
 import pytest
@@ -652,11 +651,8 @@ class H3Client(QuicClient):
         return response
 
 
-T = TypeVar("T", bound=QuicClient)
-
-
 @asynccontextmanager
-async def quic_connect(
+async def quic_connect[T: QuicClient](
     cls: type[T],
     alpn: list[str],
     address: Address,

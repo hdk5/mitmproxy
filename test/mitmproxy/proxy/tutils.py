@@ -8,7 +8,6 @@ import traceback
 from collections.abc import Callable
 from collections.abc import Iterable
 from typing import Any
-from typing import TypeVar
 
 from mitmproxy.connection import ConnectionState
 from mitmproxy.proxy import commands
@@ -356,9 +355,6 @@ class reply(events.Event):
         return inst
 
 
-T = TypeVar("T")
-
-
 class _Placeholder[T]:
     """
     Placeholder value in playbooks, so that objects (flows in particular) can be referenced before
@@ -399,7 +395,7 @@ class _Placeholder[T]:
 
 
 # noinspection PyPep8Naming
-def Placeholder(cls: type[T] = Any) -> T | _Placeholder[T]:
+def Placeholder[T](cls: type[T] = Any) -> T | _Placeholder[T]:
     return _Placeholder(cls)
 
 

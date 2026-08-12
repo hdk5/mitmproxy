@@ -5,7 +5,7 @@ import enum
 import typing
 import uuid
 from functools import cache
-from typing import TypeVar
+from typing import Self
 
 try:
     from types import NoneType
@@ -17,8 +17,6 @@ except ImportError:  # pragma: no cover
 
     NoneType = type(None)  # type: ignore
 
-T = TypeVar("T", bound="Serializable")
-
 State = typing.Any
 
 
@@ -29,7 +27,7 @@ class Serializable(metaclass=abc.ABCMeta):
 
     @classmethod
     @abc.abstractmethod
-    def from_state(cls: type[T], state) -> T:
+    def from_state(cls, state) -> Self:
         """
         Create a new object from the given state.
         Consumes the passed state.
@@ -51,14 +49,11 @@ class Serializable(metaclass=abc.ABCMeta):
         """
         raise NotImplementedError()
 
-    def copy(self: T) -> T:
+    def copy(self) -> Self:
         state = self.get_state()
         if isinstance(state, dict) and "id" in state:
             state["id"] = str(uuid.uuid4())
         return self.from_state(state)
-
-
-U = TypeVar("U", bound="SerializableDataclass")
 
 
 class SerializableDataclass(Serializable):
@@ -86,7 +81,7 @@ class SerializableDataclass(Serializable):
         return state
 
     @classmethod
-    def from_state(cls: type[U], state) -> U:
+    def from_state(cls, state) -> Self:
         # state = state.copy()
         for field in cls.__fields():
             state[field.name] = _to_val(state[field.name], field.type, field.name)

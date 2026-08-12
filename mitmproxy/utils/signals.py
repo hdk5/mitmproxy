@@ -17,11 +17,6 @@ from collections.abc import Awaitable
 from collections.abc import Callable
 from typing import Any
 from typing import cast
-from typing import ParamSpec
-from typing import TypeVar
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 def make_weak_ref(obj: Any) -> weakref.ReferenceType:
@@ -95,7 +90,7 @@ class _AsyncSignal[**P](_SignalMixin):
 
 
 # noinspection PyPep8Naming
-def SyncSignal(receiver_spec: Callable[P, None]) -> _SyncSignal[P]:
+def SyncSignal[**P](receiver_spec: Callable[P, None]) -> _SyncSignal[P]:
     """
     Create a synchronous signal with the given function signature for receivers.
 
@@ -121,7 +116,7 @@ def SyncSignal(receiver_spec: Callable[P, None]) -> _SyncSignal[P]:
 
 
 # noinspection PyPep8Naming
-def AsyncSignal(receiver_spec: Callable[P, Awaitable[None] | None]) -> _AsyncSignal[P]:
+def AsyncSignal[**P](receiver_spec: Callable[P, Awaitable[None] | None]) -> _AsyncSignal[P]:
     """
     Create an signal that supports both regular and async receivers:
 

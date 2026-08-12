@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-from typing import TypeVar
 
 import urwid
 from tornado.platform.asyncio import AddThreadSelectorEventLoop
@@ -30,8 +29,6 @@ from mitmproxy.tools.console import palettes
 from mitmproxy.tools.console import signals
 from mitmproxy.tools.console import window
 from mitmproxy.utils import strutils
-
-T = TypeVar("T", str, bytes)
 
 
 class ConsoleMaster(master.Master):
@@ -131,7 +128,7 @@ class ConsoleMaster(master.Master):
                 return editor
         return self.get_editor()
 
-    def spawn_editor(self, data: T) -> T:
+    def spawn_editor[T: (str, bytes)](self, data: T) -> T:
         text = isinstance(data, str)
         fd, name = tempfile.mkstemp("", "mitmproxy", text=text)
         with_hexeditor = isinstance(data, bytes) and strutils.is_mostly_bin(data)

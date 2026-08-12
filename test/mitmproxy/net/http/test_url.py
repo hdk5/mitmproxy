@@ -1,5 +1,3 @@
-from typing import AnyStr
-
 import pytest
 
 from mitmproxy.net.http import url
@@ -189,7 +187,7 @@ def test_default_port():
         [b"\xff", False, ("\udcff", None)],
     ],
 )
-def test_parse_authority(authority: AnyStr, valid: bool, out):
+def test_parse_authority[AnyStr: (bytes, str)](authority: AnyStr, valid: bool, out):
     assert parse_authority(authority, False) == out
 
     if valid:

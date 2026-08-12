@@ -9,7 +9,6 @@ import sys
 from collections.abc import Callable
 from collections.abc import Sequence
 from typing import Any
-from typing import TypeVar
 
 from mitmproxy import exceptions
 from mitmproxy import master
@@ -39,10 +38,7 @@ def process_options(parser, opts, args):
     opts.update(**adict)
 
 
-T = TypeVar("T", bound=master.Master)
-
-
-def run(
+def run[T: master.Master](
     master_cls: type[T],
     make_parser: Callable[[options.Options], argparse.ArgumentParser],
     arguments: Sequence[str],

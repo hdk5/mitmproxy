@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import urllib.parse
 from collections.abc import Sequence
-from typing import AnyStr
 from typing import overload
 
 from mitmproxy.net import check
@@ -140,7 +139,7 @@ def unquote(s: str) -> str:
     return urllib.parse.unquote(s, errors="surrogateescape")
 
 
-def hostport(scheme: AnyStr, host: AnyStr, port: int) -> AnyStr:
+def hostport[AnyStr: (bytes, str)](scheme: AnyStr, host: AnyStr, port: int) -> AnyStr:
     """
     Returns the host component, with a port specification if needed.
     """
@@ -153,7 +152,7 @@ def hostport(scheme: AnyStr, host: AnyStr, port: int) -> AnyStr:
             return "%s:%d" % (host, port)
 
 
-def default_port(scheme: AnyStr) -> int | None:
+def default_port[AnyStr: (bytes, str)](scheme: AnyStr) -> int | None:
     return {
         "http": 80,
         b"http": 80,
@@ -162,7 +161,7 @@ def default_port(scheme: AnyStr) -> int | None:
     }.get(scheme, None)
 
 
-def parse_authority(authority: AnyStr, check: bool) -> tuple[str, int | None]:
+def parse_authority[AnyStr: (bytes, str)](authority: AnyStr, check: bool) -> tuple[str, int | None]:
     """Extract the host and port from host header/authority information
 
     Raises:

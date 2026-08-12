@@ -1,12 +1,9 @@
 import itertools
 from collections.abc import Iterable
 from collections.abc import Iterator
-from typing import TypeVar
-
-T = TypeVar("T")
 
 
-def window(
+def window[T](
     iterator: Iterable[T], behind: int = 0, ahead: int = 0
 ) -> Iterator[tuple[T | None, ...]]:
     """
