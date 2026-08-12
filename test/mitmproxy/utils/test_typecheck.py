@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from typing import Any
 from typing import Optional
 from typing import TextIO
-from typing import Union
 
 import pytest
 
@@ -33,10 +32,10 @@ def test_check_option_type():
 
 
 def test_check_union():
-    typecheck.check_option_type("foo", 42, Union[int, str])
-    typecheck.check_option_type("foo", "42", Union[int, str])
+    typecheck.check_option_type("foo", 42, int | str)
+    typecheck.check_option_type("foo", "42", int | str)
     with pytest.raises(TypeError):
-        typecheck.check_option_type("foo", [], Union[int, str])
+        typecheck.check_option_type("foo", [], int | str)
 
 
 def test_check_tuple():

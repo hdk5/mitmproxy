@@ -11,7 +11,6 @@ from typing import Any
 from typing import AnyStr
 from typing import Generic
 from typing import TypeVar
-from typing import Union
 
 from mitmproxy.connection import ConnectionState
 from mitmproxy.proxy import commands
@@ -21,7 +20,7 @@ from mitmproxy.proxy import layer
 from mitmproxy.proxy.events import command_reply_subclasses
 from mitmproxy.proxy.layer import Layer
 
-PlaybookEntry = Union[commands.Command, events.Event]
+PlaybookEntry = commands.Command | events.Event
 PlaybookEntryList = list[PlaybookEntry]
 
 

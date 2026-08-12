@@ -10,7 +10,6 @@ The counterpart to commands are events.
 import logging
 import warnings
 from typing import TYPE_CHECKING
-from typing import Union
 
 import mitmproxy.hooks
 from mitmproxy.connection import Connection
@@ -25,7 +24,7 @@ class Command:
     Base class for all commands
     """
 
-    blocking: Union[bool, "mitmproxy.proxy.layer.Layer"] = False
+    blocking: "bool | mitmproxy.proxy.layer.Layer" = False
     """
     Determines if the command blocks until it has been completed.
     For practical purposes, this attribute should be thought of as a boolean value,

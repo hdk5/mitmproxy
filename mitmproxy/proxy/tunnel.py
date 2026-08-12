@@ -1,7 +1,6 @@
 import time
 from enum import auto
 from enum import Enum
-from typing import Union
 
 from mitmproxy import connection
 from mitmproxy.proxy import commands
@@ -189,7 +188,7 @@ class LayerStack:
     def __getitem__(self, item: int) -> Layer:
         return self._stack.__getitem__(item)
 
-    def __truediv__(self, other: Union[Layer, "LayerStack"]) -> "LayerStack":
+    def __truediv__(self, other: "Layer | LayerStack") -> "LayerStack":
         if isinstance(other, Layer):
             if self._stack:
                 self._stack[-1].child_layer = other  # type: ignore

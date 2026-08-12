@@ -6,9 +6,7 @@ try:
 except ImportError:  # pragma: no cover
     UnionType = object()  # type: ignore
 
-Type = typing.Union[
-    typing.Any  # anything more elaborate really fails with mypy at the moment.
-]
+Type = typing.Any  # anything more elaborate really fails with mypy at the moment.
 
 
 def check_option_type(name: str, value: typing.Any, typeinfo: Type) -> None:

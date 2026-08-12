@@ -6,7 +6,6 @@ from collections.abc import Iterable
 from collections.abc import Iterator
 from collections.abc import Mapping
 from typing import ClassVar
-from typing import Union
 
 from mitmproxy import flow
 from mitmproxy import http
@@ -18,7 +17,7 @@ else:
 
 KEY_MAX = 30
 
-TTextType = Union[str, bytes]  # FIXME: This should be either bytes or str ultimately.
+TTextType = str | bytes  # FIXME: This should be either bytes or str ultimately.
 TViewLine = list[tuple[str, TTextType]]
 TViewResult = tuple[str, Iterator[TViewLine]]
 

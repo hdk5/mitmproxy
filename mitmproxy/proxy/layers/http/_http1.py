@@ -1,6 +1,5 @@
 import abc
 from collections.abc import Callable
-from typing import Union
 
 import h11
 from h11._readers import ChunkedReader
@@ -35,7 +34,7 @@ from mitmproxy.proxy.layers.http._base import StreamId
 from mitmproxy.proxy.utils import expect
 from mitmproxy.utils import human
 
-TBodyReader = Union[ChunkedReader, Http10Reader, ContentLengthReader]
+TBodyReader = ChunkedReader | Http10Reader | ContentLengthReader
 
 
 class Http1Connection(HttpConnection, metaclass=abc.ABCMeta):

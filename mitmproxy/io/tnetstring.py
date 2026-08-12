@@ -42,9 +42,8 @@ all other strings are returned as plain bytes.
 
 import collections
 from typing import BinaryIO
-from typing import Union
 
-TSerializable = Union[None, str, bool, int, float, bytes, list, tuple, dict]
+TSerializable = str | bool | int | float | bytes | list | tuple | dict | None
 
 
 def dumps(value: TSerializable) -> bytes:

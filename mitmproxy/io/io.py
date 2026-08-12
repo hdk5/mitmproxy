@@ -5,7 +5,6 @@ from io import BufferedReader
 from typing import Any
 from typing import BinaryIO
 from typing import cast
-from typing import Union
 
 from mitmproxy import exceptions
 from mitmproxy import flow
@@ -66,7 +65,7 @@ class FlowReader:
                 while True:
                     # FIXME: This cast hides a lack of dynamic type checking
                     loaded = cast(
-                        dict[Union[bytes, str], Any],
+                        dict[bytes | str, Any],
                         tnetstring.load(self.fo),
                     )
                     try:

@@ -7,7 +7,6 @@ import re
 from collections.abc import Sequence
 from typing import Any
 from typing import TYPE_CHECKING
-from typing import Union
 
 from mitmproxy import exceptions
 from mitmproxy import flow
@@ -42,7 +41,7 @@ class CutSpec(Sequence[str]):
     pass
 
 
-class Data(Sequence[Sequence[Union[str, bytes]]]):
+class Data(Sequence[Sequence[str | bytes]]):
     pass
 
 
