@@ -12,7 +12,6 @@ from logging import DEBUG
 from typing import Any
 from typing import ClassVar
 from typing import NamedTuple
-from typing import TypeVar
 
 from mitmproxy.connection import Connection
 from mitmproxy.proxy import commands
@@ -21,8 +20,7 @@ from mitmproxy.proxy.commands import Command
 from mitmproxy.proxy.commands import StartHook
 from mitmproxy.proxy.context import Context
 
-T = TypeVar("T")
-CommandGenerator = Generator[Command, Any, T]
+type CommandGenerator[T] = Generator[Command, Any, T]
 """
 A function annotated with CommandGenerator[bool] may yield commands and ultimately return a boolean value.
 """
