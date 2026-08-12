@@ -40,7 +40,6 @@ import re
 import socket
 from html.parser import HTMLParser
 from typing import NamedTuple
-from typing import Optional
 from urllib.parse import urlparse
 
 import requests
@@ -79,7 +78,7 @@ class SQLiData(NamedTuple):
     dbms: str
 
 
-VulnData = tuple[Optional[XSSData], Optional[SQLiData]]
+VulnData = tuple[XSSData | None, SQLiData | None]
 Cookies = dict[str, str]
 
 

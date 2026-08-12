@@ -5,7 +5,6 @@ import pathlib
 import shutil
 import time
 from collections.abc import Iterable
-from typing import Optional
 
 from mitmproxy import contentviews
 from mitmproxy import ctx
@@ -100,7 +99,7 @@ class StaticViewer:
     def load(self, loader):
         loader.add_option(
             "web_static_viewer",
-            Optional[str],
+            str | None,
             "",
             "The path to output a static viewer.",
         )

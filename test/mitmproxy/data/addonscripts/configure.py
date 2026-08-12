@@ -1,4 +1,3 @@
-from typing import Optional
 
 from mitmproxy import exceptions
 
@@ -7,7 +6,7 @@ class OptionAddon:
     def load(self, loader):
         loader.add_option(
             name="optionaddon",
-            typespec=Optional[int],
+            typespec=int | None,
             default=None,
             help="Option Addon",
         )

@@ -16,7 +16,6 @@ from collections.abc import Iterator
 from collections.abc import MutableMapping
 from collections.abc import Sequence
 from typing import Any
-from typing import Optional
 
 import sortedcontainers
 
@@ -188,7 +187,7 @@ class View(collections.abc.Sequence):
 
     def load(self, loader):
         loader.add_option(
-            "view_filter", Optional[str], None, "Limit the view to matching flows."
+            "view_filter", str | None, None, "Limit the view to matching flows."
         )
         loader.add_option(
             "view_order",

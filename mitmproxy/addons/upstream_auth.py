@@ -1,6 +1,5 @@
 import base64
 import re
-from typing import Optional
 
 from mitmproxy import ctx
 from mitmproxy import exceptions
@@ -32,7 +31,7 @@ class UpstreamAuth:
     def load(self, loader):
         loader.add_option(
             "upstream_auth",
-            Optional[str],
+            str | None,
             None,
             """
             Add HTTP Basic authentication to upstream proxy and reverse proxy

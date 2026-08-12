@@ -3,7 +3,6 @@ from __future__ import annotations
 import shutil
 import sys
 from typing import IO
-from typing import Optional
 
 from wsproto.frame_protocol import CloseReason
 
@@ -73,7 +72,7 @@ class Dumper:
             choices=contentviews.registry.available_views(),
         )
         loader.add_option(
-            "dumper_filter", Optional[str], None, "Limit which flows are dumped."
+            "dumper_filter", str | None, None, "Limit which flows are dumped."
         )
 
     def configure(self, updated):

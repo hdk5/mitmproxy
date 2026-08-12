@@ -2,7 +2,6 @@ import io
 import typing
 from collections.abc import Sequence
 from typing import Any
-from typing import Optional
 from typing import TextIO
 
 import pytest
@@ -77,8 +76,8 @@ def test_check_any():
 def test_typesec_to_str():
     assert (typecheck.typespec_to_str(str)) == "str"
     assert (typecheck.typespec_to_str(Sequence[str])) == "sequence of str"
-    assert (typecheck.typespec_to_str(Optional[str])) == "optional str"
-    assert (typecheck.typespec_to_str(Optional[int])) == "optional int"
+    assert (typecheck.typespec_to_str(str | None)) == "optional str"
+    assert (typecheck.typespec_to_str(int | None)) == "optional int"
     with pytest.raises(NotImplementedError):
         typecheck.typespec_to_str(dict)
 

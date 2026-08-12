@@ -3,7 +3,6 @@ import logging
 import os.path
 import sys
 from typing import BinaryIO
-from typing import Optional
 
 from mitmproxy import command
 from mitmproxy import ctx
@@ -25,9 +24,9 @@ class ReadFile:
         self._read_task: asyncio.Task | None = None
 
     def load(self, loader):
-        loader.add_option("rfile", Optional[str], None, "Read flows from file.")
+        loader.add_option("rfile", str | None, None, "Read flows from file.")
         loader.add_option(
-            "readfile_filter", Optional[str], None, "Read only matching flows."
+            "readfile_filter", str | None, None, "Read only matching flows."
         )
 
     def configure(self, updated):

@@ -1,6 +1,5 @@
 import collections
 from http import cookiejar
-from typing import Optional
 
 from mitmproxy import ctx
 from mitmproxy import exceptions
@@ -42,7 +41,7 @@ class StickyCookie:
     def load(self, loader):
         loader.add_option(
             "stickycookie",
-            Optional[str],
+            str | None,
             None,
             "Set sticky cookie filter. Matched against requests.",
         )

@@ -1,5 +1,4 @@
 import struct
-from typing import Optional
 
 from . import types
 
@@ -8,7 +7,7 @@ _POINTER_OFFSET = struct.Struct("!H")
 _POINTER_INDICATOR = 0b11000000
 
 
-Cache = dict[int, Optional[tuple[str, int]]]
+Cache = dict[int, tuple[str, int] | None]
 
 
 def cache() -> Cache:

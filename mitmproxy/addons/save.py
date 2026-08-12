@@ -6,7 +6,6 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
-from typing import Optional
 
 import mitmproxy.types
 from mitmproxy import command
@@ -49,7 +48,7 @@ class Save:
     def load(self, loader):
         loader.add_option(
             "save_stream_file",
-            Optional[str],
+            str | None,
             None,
             """
             Stream flows to file as they arrive. Prefix path with + to append.
@@ -60,7 +59,7 @@ class Save:
         )
         loader.add_option(
             "save_stream_filter",
-            Optional[str],
+            str | None,
             None,
             "Filter which flows are written to file.",
         )

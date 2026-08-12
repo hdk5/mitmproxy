@@ -1,4 +1,3 @@
-from typing import Optional
 
 from mitmproxy import ctx
 from mitmproxy import exceptions
@@ -12,7 +11,7 @@ class Intercept:
     def load(self, loader):
         loader.add_option("intercept_active", bool, False, "Intercept toggle")
         loader.add_option(
-            "intercept", Optional[str], None, "Intercept filter expression."
+            "intercept", str | None, None, "Intercept filter expression."
         )
 
     def configure(self, updated):

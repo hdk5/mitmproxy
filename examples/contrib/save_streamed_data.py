@@ -23,7 +23,6 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from mitmproxy import ctx
 
@@ -92,7 +91,7 @@ class StreamSaver:
 def load(loader):
     loader.add_option(
         "save_streamed_data",
-        Optional[str],
+        str | None,
         None,
         "Format string for saving streamed data to files. If set each streamed request or response is written "
         "to a file with a name derived from the string. In addition to formating supported by python "

@@ -4,7 +4,6 @@ import pprint
 import textwrap
 import typing
 from collections.abc import Sequence
-from typing import Optional
 
 import urwid
 
@@ -20,7 +19,7 @@ HELP_HEIGHT = 5
 def can_edit_inplace(opt):
     if opt.choices:
         return False
-    if opt.typespec in [str, int, Optional[str], Optional[int]]:
+    if opt.typespec in [str, int, str | None, int | None]:
         return True
 
 

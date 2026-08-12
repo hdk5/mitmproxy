@@ -6,7 +6,6 @@ import weakref
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import MutableMapping
-from typing import Optional
 
 import ldap3
 
@@ -34,7 +33,7 @@ class ProxyAuth:
     def load(self, loader):
         loader.add_option(
             "proxyauth",
-            Optional[str],
+            str | None,
             None,
             """
             Require proxy authentication. Format:

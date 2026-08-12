@@ -3,7 +3,6 @@ import binascii
 import logging
 import socket
 from typing import Any
-from typing import Optional
 
 from ntlm_auth import gss_channel_bindings
 from ntlm_auth import ntlm
@@ -35,7 +34,7 @@ class NTLMUpstreamAuth:
         logging.info("NTLMUpstreamAuth loader")
         loader.add_option(
             name="upstream_ntlm_auth",
-            typespec=Optional[str],
+            typespec=str | None,
             default=None,
             help="""
             Add HTTP NTLM authentication to upstream proxy requests.
@@ -44,7 +43,7 @@ class NTLMUpstreamAuth:
         )
         loader.add_option(
             name="upstream_ntlm_domain",
-            typespec=Optional[str],
+            typespec=str | None,
             default=None,
             help="""
             Add HTTP NTLM domain for authentication to upstream proxy requests.
@@ -52,7 +51,7 @@ class NTLMUpstreamAuth:
         )
         loader.add_option(
             name="upstream_proxy_address",
-            typespec=Optional[str],
+            typespec=str | None,
             default=None,
             help="""
                 upstream poxy address.

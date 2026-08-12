@@ -18,7 +18,6 @@ from typing import Any
 from typing import ClassVar
 from typing import Concatenate
 from typing import Literal
-from typing import Optional
 
 import tornado.escape
 import tornado.web
@@ -380,7 +379,7 @@ class WebSocketEventBroadcaster(tornado.websocket.WebSocketHandler, AuthRequestH
     _send_queue: asyncio.Queue[bytes]
     _send_task: asyncio.Task[None]
 
-    def prepare(self) -> Optional[Awaitable[None]]:
+    def prepare(self) -> Awaitable[None] | None:
         token = self.xsrf_token  # https://github.com/tornadoweb/tornado/issues/645
         assert token
         return None

@@ -11,7 +11,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from typing import Optional
 from typing import TextIO
 
 import ruamel.yaml
@@ -33,7 +32,7 @@ class _Option:
     def __init__(
         self,
         name: str,
-        typespec: type | object,  # object for Optional[x], which is not a type.
+        typespec: type | object,  # object for unions, which are not types.
         default: Any,
         help: str,
         choices: Sequence[str] | None,
@@ -378,11 +377,11 @@ class OptManager:
         else:
             optstr = None
 
-        if o.typespec in (str, Optional[str]):
+        if o.typespec in (str, str | None):
             if o.typespec is str and optstr is None:
                 raise exceptions.OptionsError(f"Option is required: {o.name}")
             return optstr
-        elif o.typespec in (int, Optional[int]):
+        elif o.typespec in (int, int | None):
             if optstr:
                 try:
                     return int(optstr)
@@ -445,7 +444,7 @@ class OptManager:
             )
             g.add_argument(*onf, action="store_true", dest=optname, help=o.help)
             parser.set_defaults(**{optname: None})
-        elif o.typespec in (int, Optional[int]):
+        elif o.typespec in (int, int | None):
             parser.add_argument(
                 *flags,
                 action="store",
@@ -454,7 +453,7 @@ class OptManager:
                 help=o.help,
                 metavar=metavar,
             )
-        elif o.typespec in (str, Optional[str]):
+        elif o.typespec in (str, str | None):
             parser.add_argument(
                 *flags,
                 action="store",

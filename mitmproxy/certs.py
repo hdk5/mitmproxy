@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 from typing import NewType
-from typing import Optional
 
 import OpenSSL
 from cryptography import x509
@@ -438,7 +437,7 @@ class CertStoreEntry:
 
 
 TCustomCertId = str  # manually provided certs (e.g. mitmproxy's --certs)
-TGeneratedCertId = tuple[Optional[str], x509.GeneralNames]  # (common_name, sans)
+TGeneratedCertId = tuple[str | None, x509.GeneralNames]  # (common_name, sans)
 TCertId = TCustomCertId | TGeneratedCertId
 
 DHParams = NewType("DHParams", bytes)

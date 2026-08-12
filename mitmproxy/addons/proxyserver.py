@@ -11,7 +11,6 @@ import logging
 from collections.abc import Iterable
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Optional
 
 from wsproto.frame_protocol import Opcode
 
@@ -163,7 +162,7 @@ class Proxyserver(ServerManager):
         )
         loader.add_option(
             "stream_large_bodies",
-            Optional[str],
+            str | None,
             None,
             """
             Stream data to the client if request or response body exceeds the given
@@ -174,7 +173,7 @@ class Proxyserver(ServerManager):
         )
         loader.add_option(
             "body_size_limit",
-            Optional[str],
+            str | None,
             None,
             """
             Byte size limit of HTTP request and response bodies. Understands
@@ -217,7 +216,7 @@ class Proxyserver(ServerManager):
         )
         loader.add_option(
             "connect_addr",
-            Optional[str],
+            str | None,
             None,
             """Set the local IP address that mitmproxy should use when connecting to upstream servers.""",
         )

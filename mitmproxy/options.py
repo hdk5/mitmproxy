@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Optional
 
 from mitmproxy import optmanager
 
@@ -66,7 +65,7 @@ class Options(optmanager.OptManager):
         )
         self.add_option(
             "cert_passphrase",
-            Optional[str],
+            str | None,
             None,
             """
             Passphrase for decrypting the private key provided in the --cert option.
@@ -76,7 +75,7 @@ class Options(optmanager.OptManager):
             """,
         )
         self.add_option(
-            "client_certs", Optional[str], None, "Client certificate file or directory."
+            "client_certs", str | None, None, "Client certificate file or directory."
         )
         self.add_option(
             "ignore_hosts",
@@ -99,7 +98,7 @@ class Options(optmanager.OptManager):
         )
         self.add_option(
             "listen_port",
-            Optional[int],
+            int | None,
             None,
             "Port to bind proxy server(s) to (may be overridden for individual modes, see `mode`). "
             "By default, the port is mode-specific. The default regular HTTP proxy spawns on port 8080.",
@@ -181,7 +180,7 @@ class Options(optmanager.OptManager):
         )
         self.add_option(
             "ssl_verify_upstream_trusted_confdir",
-            Optional[str],
+            str | None,
             None,
             """
             Path to a directory of trusted CA certificates for upstream server
@@ -190,7 +189,7 @@ class Options(optmanager.OptManager):
         )
         self.add_option(
             "ssl_verify_upstream_trusted_ca",
-            Optional[str],
+            str | None,
             None,
             "Path to a PEM formatted trusted CA certificate.",
         )
@@ -233,7 +232,7 @@ class Options(optmanager.OptManager):
         )
         self.add_option(
             "protobuf_definitions",
-            Optional[str],
+            str | None,
             None,
             "Path to a .proto file that's used to resolve Protobuf field names when pretty-printing.",
         )

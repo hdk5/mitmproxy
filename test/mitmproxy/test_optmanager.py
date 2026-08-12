@@ -3,7 +3,6 @@ import copy
 import io
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional
 
 import pytest
 
@@ -15,8 +14,8 @@ from mitmproxy import optmanager
 class TO(optmanager.OptManager):
     def __init__(self):
         super().__init__()
-        self.add_option("one", Optional[int], None, "help")
-        self.add_option("two", Optional[int], 2, "help")
+        self.add_option("one", int | None, None, "help")
+        self.add_option("two", int | None, 2, "help")
         self.add_option("bool", bool, False, "help")
         self.add_option("required_int", int, 2, "help")
 
@@ -39,7 +38,7 @@ class TM(optmanager.OptManager):
     def __init__(self):
         super().__init__()
         self.add_option("two", Sequence[str], ["foo"], "help")
-        self.add_option("one", Optional[str], None, "help")
+        self.add_option("one", str | None, None, "help")
 
 
 class TS(optmanager.OptManager):
@@ -388,11 +387,11 @@ class TTypes(optmanager.OptManager):
         super().__init__()
         self.add_option("str", str, "str", "help")
         self.add_option("choices", str, "foo", "help", ["foo", "bar", "baz"])
-        self.add_option("optstr", Optional[str], "optstr", "help")
+        self.add_option("optstr", str | None, "optstr", "help")
         self.add_option("bool", bool, False, "help")
         self.add_option("bool_on", bool, True, "help")
         self.add_option("int", int, 0, "help")
-        self.add_option("optint", Optional[int], 0, "help")
+        self.add_option("optint", int | None, 0, "help")
         self.add_option("seqstr", Sequence[str], [], "help")
         self.add_option("unknown", float, 0.0, "help")
 

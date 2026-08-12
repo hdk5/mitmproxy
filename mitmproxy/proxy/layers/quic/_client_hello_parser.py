@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 from aioquic.buffer import Buffer as QuicBuffer
 from aioquic.quic.configuration import QuicConfiguration
@@ -31,7 +30,7 @@ class QuicClientHello(Exception):
 
 def quic_parse_client_hello_from_datagrams(
     datagrams: list[bytes],
-) -> Optional[ClientHello]:
+) -> ClientHello | None:
     """
     Check if the supplied bytes contain a full ClientHello message,
     and if so, parse it.

@@ -59,11 +59,11 @@ def check_option_type(name: str, value: typing.Any, typeinfo: Type) -> None:
 def typespec_to_str(typespec: typing.Any) -> str:
     if typespec in (str, int, float, bool):
         t = typespec.__name__
-    elif typespec == typing.Optional[str]:
+    elif typespec == str | None:
         t = "optional str"
     elif typespec in (typing.Sequence[str], abc.Sequence[str]):
         t = "sequence of str"
-    elif typespec == typing.Optional[int]:
+    elif typespec == int | None:
         t = "optional int"
     else:
         raise NotImplementedError

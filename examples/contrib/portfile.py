@@ -1,6 +1,5 @@
 import json
 import pathlib
-from typing import Optional
 
 from mitmproxy import ctx
 
@@ -9,7 +8,7 @@ class PortFile:
     def load(self, loader):
         loader.add_option(
             name="datadir",
-            typespec=Optional[str],
+            typespec=str | None,
             default=None,
             help="Creates `portfile` mapping proxies (by mode spec) to the port "
             "they use in the provided directory.",
