@@ -86,7 +86,7 @@ class FlowListBox(urwid.ListBox, layoutwidget.LayoutWidget):
     keyctx = "flowlist"
 
     def __init__(self, master: "mitmproxy.tools.console.master.ConsoleMaster") -> None:
-        self.master: "mitmproxy.tools.console.master.ConsoleMaster" = master
+        self.master: mitmproxy.tools.console.master.ConsoleMaster = master
         super().__init__(FlowListWalker(master))
         self.master.options.subscribe(
             self.set_flowlist_layout, ["console_flowlist_layout"]

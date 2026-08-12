@@ -2,6 +2,8 @@
 This module manages and invokes typed commands.
 """
 
+from __future__ import annotations
+
 import functools
 import inspect
 import logging
@@ -64,11 +66,11 @@ class CommandParameter(NamedTuple):
 
 class Command:
     name: str
-    manager: "CommandManager"
+    manager: CommandManager
     signature: inspect.Signature
     help: str | None
 
-    def __init__(self, manager: "CommandManager", name: str, func: Callable) -> None:
+    def __init__(self, manager: CommandManager, name: str, func: Callable) -> None:
         self.name = name
         self.manager = manager
         self.func = func

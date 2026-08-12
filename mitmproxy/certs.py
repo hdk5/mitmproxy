@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import datetime
 import ipaddress
@@ -91,7 +93,7 @@ class Cert(serializable.Serializable):
         self._cert = x509.load_pem_x509_certificate(state)
 
     @classmethod
-    def from_pem(cls, data: bytes) -> "Cert":
+    def from_pem(cls, data: bytes) -> Cert:
         cert = x509.load_pem_x509_certificate(data)  # type: ignore
         return cls(cert)
 
@@ -99,7 +101,7 @@ class Cert(serializable.Serializable):
         return self._cert.public_bytes(serialization.Encoding.PEM)
 
     @classmethod
-    def from_pyopenssl(self, x509: OpenSSL.crypto.X509) -> "Cert":
+    def from_pyopenssl(self, x509: OpenSSL.crypto.X509) -> Cert:
         return Cert(x509.to_cryptography())
 
     @deprecated("Use `to_cryptography` instead.")
@@ -520,7 +522,7 @@ class CertStore:
         basename: str,
         key_size: int,
         passphrase: bytes | None = None,
-    ) -> "CertStore":
+    ) -> CertStore:
         path = Path(path)
         ca_file = path / f"{basename}-ca.pem"
         dhparam_file = path / f"{basename}-dhparam.pem"
@@ -531,7 +533,7 @@ class CertStore:
     @classmethod
     def from_files(
         cls, ca_file: Path, dhparam_file: Path, passphrase: bytes | None = None
-    ) -> "CertStore":
+    ) -> CertStore:
         raw = ca_file.read_bytes()
         key = load_pem_private_key(raw, passphrase)
         dh = cls.load_dhparam(dhparam_file)

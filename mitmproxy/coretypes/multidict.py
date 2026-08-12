@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABCMeta
 from abc import abstractmethod
 from collections.abc import Iterator
@@ -202,5 +204,5 @@ class MultiDictView(_MultiDict[KT, VT]):
     def fields(self, value):
         self._setter(value)
 
-    def copy(self) -> "MultiDict[KT,VT]":
+    def copy(self) -> MultiDict[KT, VT]:
         return MultiDict(self.fields)
