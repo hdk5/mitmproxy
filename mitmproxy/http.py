@@ -41,6 +41,9 @@ MessageStreamResult = bytes | Iterable[bytes] | AsyncIterable[bytes]
 MessageStreamCallable = Callable[
     [bytes], MessageStreamResult | Awaitable[MessageStreamResult]
 ]
+FlowStreamCallable = Callable[
+    [bytes | None], MessageStreamResult | Awaitable[MessageStreamResult]
+]
 
 
 # While headers _should_ be ASCII, it's not uncommon for certain headers to be utf-8 encoded.
@@ -1227,6 +1230,27 @@ class HTTPFlow(flow.Flow):
     """The client's HTTP request."""
     response: Response | None = None
     """The server's HTTP response."""
+    stream: FlowStreamCallable | None = None
+    """
+    Callback for custom request and response stream handling.
+
+    Called with `None` after `requestheaders`, with each request body chunk,
+    and with `b""` when the request ends. Returned bytes are sent as response
+    body chunks; `b""` marks the end of the response.
+
+    If request or response body transformations are also configured, chunks
+    pass through them in this order: `request.stream`, `HTTPFlow.stream`, then
+    `response.stream`.
+
+    Synchronous callbacks are evaluated inline by default. Decorate a callback
+    with `mitmproxy.script.run_in_thread` to evaluate it and its returned
+    synchronous iterable serially in worker threads. Async callbacks and async
+    iterables are awaited cooperatively without blocking other proxy
+    connections.
+
+    Set `response` before yielding any response value. The final call must end
+    the response unless it has already ended earlier.
+    """
     error: flow.Error | None = None
     """
     A connection or protocol error affecting this flow.

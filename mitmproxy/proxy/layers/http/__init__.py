@@ -290,26 +290,32 @@ class HttpStream(layer.Layer):
             )
             self.flow.request.headers.pop("expect")
 
-        if self.flow.request.stream and not event.end_stream:
+        self.server_state = self.state_wait_for_response_headers
+        if self.flow.stream:
+            yield from self.start_request_stream()
+        elif self.flow.request.stream and not event.end_stream:
             yield from self.start_request_stream()
         else:
             self.client_state = self.state_consume_request_body
-        self.server_state = self.state_wait_for_response_headers
 
     def start_request_stream(self) -> layer.CommandGenerator[None]:
         if self.flow.response:
             raise NotImplementedError(
                 "Can't set a response and enable streaming at the same time."
             )
-        ok = yield from self.make_server_connection()
-        if not ok:
-            self.client_state = self.state_errored
-            return
-        yield SendHttp(
-            RequestHeaders(self.stream_id, self.flow.request, end_stream=False),
-            self.context.server,
-        )
-        yield commands.Log(f"Streaming request to {self.flow.request.host}.")
+        elif self.flow.stream:
+            yield commands.Log("Streaming request to handler.")
+            yield from self.read_flow_stream(None)
+        else:
+            ok = yield from self.make_server_connection()
+            if not ok:
+                self.client_state = self.state_errored
+                return
+            yield SendHttp(
+                RequestHeaders(self.stream_id, self.flow.request, end_stream=False),
+                self.context.server,
+            )
+            yield commands.Log(f"Streaming request to {self.flow.request.host}.")
         self.client_state = self.state_stream_request_body
 
     def read_message_stream(
@@ -377,12 +383,136 @@ class HttpStream(layer.Layer):
             self.response_body_buf += chunk
         yield SendHttp(ResponseData(self.stream_id, chunk), self.context.client)
 
+    def read_flow_stream(
+        self, request_chunk: bytes | None
+    ) -> layer.CommandGenerator[None]:
+        stream = self.flow.stream
+        assert stream
+        response_chunks = stream(request_chunk)
+
+        if inspect.isawaitable(response_chunks):
+            response_chunks = yield from commands.Await(response_chunks).unwrap()
+
+        # The callback may only set flow.response as a side effect, so process
+        # that before iterating over any response chunks.
+        if self.server_state != self.state_done:
+            yield from self.send_flow_stream_response(None)
+
+        if isinstance(response_chunks, bytes):
+            response_chunks = [response_chunks]
+
+        if isinstance(response_chunks, AsyncIterable):
+            async_iterator = aiter(response_chunks)
+            while True:
+                try:
+                    response_chunk = yield from commands.Await(
+                        anext(async_iterator)
+                    ).unwrap()
+                except StopAsyncIteration:
+                    break
+                yield from self.write_flow_stream(response_chunk)
+        else:
+            for response_chunk in response_chunks:
+                yield from self.write_flow_stream(response_chunk)
+
+        if request_chunk == b"" and self.server_state != self.state_done:
+            raise ValueError(
+                "HTTPFlow.stream did not end the response: "
+                "the final stream(b'') call must yield b'' before returning."
+            )
+
+    def write_flow_stream(self, response_chunk: object) -> layer.CommandGenerator[None]:
+        if not isinstance(response_chunk, bytes):
+            raise TypeError(
+                "HTTPFlow.stream must yield bytes chunks, "
+                f"not {type(response_chunk).__name__}."
+            )
+        if self.server_state == self.state_done:
+            yield from self.send_flow_stream_response(response_chunk)
+            return
+
+        # flow.response may be assigned while advancing a lazy flow.stream
+        # iterable. Process it (and the responseheaders hook) before deciding
+        # whether the response chunk needs another transformation.
+        if self.server_state != self.state_done:
+            yield from self.send_flow_stream_response(None)
+
+        if self.flow.response and callable(self.flow.response.stream):
+            yield from self.read_response_stream(response_chunk)
+        if response_chunk == b"" or not (
+            self.flow.response and callable(self.flow.response.stream)
+        ):
+            yield from self.send_flow_stream_response(response_chunk)
+
+    def send_flow_stream_response(
+        self, chunk: bytes | None
+    ) -> layer.CommandGenerator[None]:
+        if self.server_state == self.state_done:
+            raise ValueError(
+                "HTTPFlow.stream yielded data after the end-of-message marker."
+            )
+
+        if self.flow.response:
+            if self.flow.response.raw_content is not None:
+                raise ValueError(
+                    "HTTPFlow.stream cannot set flow.response content; "
+                    "yield response data from the stream instead."
+                )
+
+            if self.server_state == self.state_wait_for_response_headers:
+                self.flow.response.timestamp_start = time.time()
+                yield HttpResponseHeadersHook(self.flow)
+                if (yield from self.check_killed(True)):
+                    return
+                yield SendHttp(
+                    ResponseHeaders(
+                        self.stream_id, self.flow.response, end_stream=False
+                    ),
+                    self.context.client,
+                )
+                self.server_state = self.state_stream_response_body
+
+        if chunk is None:
+            return
+
+        if self.server_state == self.state_wait_for_response_headers:
+            raise ValueError(
+                "HTTPFlow.stream must set flow.response before yielding response data."
+            )
+
+        if chunk == b"":
+            if self.context.options.store_streamed_bodies:
+                assert self.flow.response
+                self.flow.response.data.content = bytes(self.response_body_buf)
+                self.response_body_buf.clear()
+            assert self.flow.response
+            self.flow.response.timestamp_end = time.time()
+            yield HttpResponseHook(self.flow)
+            if (yield from self.check_killed(True)):
+                return
+            if self.flow.response.trailers:
+                yield SendHttp(
+                    ResponseTrailers(self.stream_id, self.flow.response.trailers),
+                    self.context.client,
+                )
+            yield SendHttp(ResponseEndOfMessage(self.stream_id), self.context.client)
+            self.server_state = self.state_done
+            return
+
+        if self.context.options.store_streamed_bodies:
+            self.response_body_buf += chunk
+        yield SendHttp(ResponseData(self.stream_id, chunk), self.context.client)
+
     @expect(RequestData, RequestTrailers, RequestEndOfMessage)
     def state_stream_request_body(
-        self, event: RequestData | RequestEndOfMessage
+        self, event: RequestData | RequestTrailers | RequestEndOfMessage
     ) -> layer.CommandGenerator[None]:
         if isinstance(event, RequestData):
-            if callable(self.flow.request.stream):
+            if self.flow.stream:
+                if self.context.options.store_streamed_bodies:
+                    self.request_body_buf += event.data
+                yield from self.read_flow_stream(event.data)
+            elif callable(self.flow.request.stream):
                 yield from self.read_request_stream(event.data)
             else:
                 if self.context.options.store_streamed_bodies:
@@ -392,7 +522,9 @@ class HttpStream(layer.Layer):
             # we don't do anything further here, we wait for RequestEndOfMessage first to trigger the request hook.
             self.flow.request.trailers = event.trailers
         elif isinstance(event, RequestEndOfMessage):
-            if callable(self.flow.request.stream):
+            if self.flow.stream:
+                yield from self.read_flow_stream(b"")
+            elif callable(self.flow.request.stream):
                 yield from self.read_request_stream(b"")
 
             if self.context.options.store_streamed_bodies:
@@ -402,13 +534,14 @@ class HttpStream(layer.Layer):
             yield HttpRequestHook(self.flow)
             self.client_state = self.state_done
 
-            if self.flow.request.trailers:
-                # we've delayed sending trailers until after `request` has been triggered.
-                yield SendHttp(
-                    RequestTrailers(self.stream_id, self.flow.request.trailers),
-                    self.context.server,
-                )
-            yield SendHttp(event, self.context.server)
+            if not self.flow.stream:
+                if self.flow.request.trailers:
+                    # we've delayed sending trailers until after `request` has been triggered.
+                    yield SendHttp(
+                        RequestTrailers(self.stream_id, self.flow.request.trailers),
+                        self.context.server,
+                    )
+                yield SendHttp(event, self.context.server)
 
             if self.server_state == self.state_done:
                 yield from self.flow_done()
@@ -603,7 +736,8 @@ class HttpStream(layer.Layer):
 
         # delay sending EOM until the child layer is set up,
         # we may get data immediately and need to be prepared to handle it.
-        yield SendHttp(ResponseEndOfMessage(self.stream_id), self.context.client)
+        if not self.flow.stream:
+            yield SendHttp(ResponseEndOfMessage(self.stream_id), self.context.client)
 
     def check_body_size(self, request: bool) -> layer.CommandGenerator[bool]:
         """
