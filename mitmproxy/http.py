@@ -41,8 +41,9 @@ MessageStreamResult = bytes | Iterable[bytes] | AsyncIterable[bytes]
 MessageStreamCallable = Callable[
     [bytes], MessageStreamResult | Awaitable[MessageStreamResult]
 ]
+FlowStreamResult = bytes | None | Iterable[bytes | None] | AsyncIterable[bytes | None]
 FlowStreamCallable = Callable[
-    [bytes | None], MessageStreamResult | Awaitable[MessageStreamResult]
+    [bytes | None], FlowStreamResult | Awaitable[FlowStreamResult]
 ]
 
 
@@ -1236,7 +1237,10 @@ class HTTPFlow(flow.Flow):
 
     Called with `None` after `requestheaders`, with each request body chunk,
     and with `b""` when the request ends. Returned bytes are sent as response
-    body chunks; `b""` marks the end of the response.
+    body chunks; `b""` marks the end of the response. Returning `None` is
+    equivalent to returning an empty iterable. A returned iterable may yield
+    `None` to send newly assigned response headers without sending body data.
+    The stream must yield `None` before yielding any response body data.
 
     If request or response body transformations are also configured, chunks
     pass through them in this order: `request.stream`, `HTTPFlow.stream`, then

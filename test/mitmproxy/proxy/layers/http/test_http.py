@@ -580,7 +580,7 @@ async def test_flow_stream_transformers(tctx, style):
         def transform(chunk):
             assert chunk is None
             start_response()
-            return [b"body", b""]
+            return [None, b"body", b""]
 
     elif style == "threaded_generator":
 
@@ -588,6 +588,7 @@ async def test_flow_stream_transformers(tctx, style):
         def transform(chunk):
             assert chunk is None
             start_response()
+            yield None
             yield b"body"
             yield b""
 
@@ -596,13 +597,14 @@ async def test_flow_stream_transformers(tctx, style):
         async def transform(chunk):
             assert chunk is None
             start_response()
-            return [b"body", b""]
+            return [None, b"body", b""]
 
     else:
 
         async def transform(chunk):
             assert chunk is None
             start_response()
+            yield None
             yield b"body"
             yield b""
 
@@ -629,11 +631,114 @@ async def test_flow_stream_transformers(tctx, style):
         assert all(isinstance(command, commands.Await) for command in blocking)
 
 
+async def test_flow_stream_none_sends_response_headers(tctx):
+    stream = http.HttpStream(tctx, 1)
+    stream.flow = tflow.tflow()
+    stream.server_state = stream.state_wait_for_response_headers
+
+    async def transform(chunk):
+        assert chunk is None
+        response = Response.make(200, headers={"content-length": "4"})
+        response.raw_content = None
+        stream.flow.response = response
+        yield None
+
+        # The None event must be processed before the iterator is resumed.
+        assert stream.server_state == stream.state_stream_response_body
+        yield b"body"
+        yield b""
+
+    stream.flow.stream = transform
+    emitted, _ = await run_message_stream(stream.read_flow_stream(None))
+
+    sent = [command.event for command in emitted if isinstance(command, http.SendHttp)]
+    assert [type(event) for event in sent] == [
+        http.ResponseHeaders,
+        http.ResponseData,
+        http.ResponseEndOfMessage,
+    ]
+    assert sent[1].data == b"body"
+
+
+async def test_flow_stream_applies_request_stream(tctx):
+    stream = http.HttpStream(tctx, 1)
+    stream.flow = tflow.tflow()
+    stream.server_state = stream.state_wait_for_response_headers
+    tctx.options.store_streamed_bodies = True
+    seen = []
+
+    stream.flow.request.stream = lambda chunk: b"[" + chunk + b"]"
+
+    def transform(chunk):
+        seen.append(chunk)
+        return []
+
+    stream.flow.stream = transform
+    await run_message_stream(stream.read_flow_stream_request(b"body"))
+
+    assert seen == [b"[body]"]
+    assert bytes(stream.request_body_buf) == b"[body]"
+
+
+async def test_flow_stream_applies_response_stream(tctx):
+    stream = http.HttpStream(tctx, 1)
+    stream.flow = tflow.tflow()
+    stream.server_state = stream.state_wait_for_response_headers
+    tctx.options.store_streamed_bodies = True
+
+    def transform(chunk):
+        assert chunk is None
+        response = Response.make(200)
+        response.raw_content = None
+        response.stream = lambda body: [b"[", body, b"]"]
+        stream.flow.response = response
+        return [None, b"body", b""]
+
+    stream.flow.stream = transform
+    emitted, _ = await run_message_stream(stream.read_flow_stream(None))
+
+    sent = [command.event for command in emitted if isinstance(command, http.SendHttp)]
+    body = b"".join(
+        event.data for event in sent if isinstance(event, http.ResponseData)
+    )
+    assert body == b"[body][]"
+    assert stream.flow.response.raw_content == b"[body][]"
+
+
+@pytest.mark.parametrize("empty_result", [None, []])
+async def test_flow_stream_empty_result(tctx, empty_result):
+    stream = http.HttpStream(tctx, 1)
+    stream.flow = tflow.tflow()
+    stream.server_state = stream.state_wait_for_response_headers
+
+    def transform(chunk):
+        assert chunk is None
+        response = Response.make(200)
+        response.raw_content = None
+        stream.flow.response = response
+        return empty_result
+
+    stream.flow.stream = transform
+    emitted, _ = await run_message_stream(stream.read_flow_stream(None))
+
+    sent = [command.event for command in emitted if isinstance(command, http.SendHttp)]
+    assert sent == []
+    assert stream.server_state == stream.state_wait_for_response_headers
+
+
 @pytest.mark.parametrize(
     ("failure", "message"),
     [
         ("response_content", "cannot set flow.response content"),
-        ("data_before_response", "must set flow.response before yielding"),
+        (
+            "data_before_response",
+            "must yield response headers before yielding response data",
+        ),
+        (
+            "data_before_headers",
+            "must yield response headers before yielding response data",
+        ),
+        ("headers_before_response", "must set flow.response before yielding"),
         ("missing_response_eom", "did not end the response"),
     ],
 )
@@ -645,9 +750,16 @@ async def test_flow_stream_validation(tctx, failure, message):
     def transform(_chunk):
         if failure == "response_content":
             stream.flow.response = Response.make(200, b"body")
-            return []
+            return [None]
         if failure == "data_before_response":
             return [b"body"]
+        if failure == "data_before_headers":
+            response = Response.make(200)
+            response.raw_content = None
+            stream.flow.response = response
+            return [b"body"]
+        if failure == "headers_before_response":
+            return [None]
 
         response = Response.make(200)
         response.raw_content = None
@@ -671,7 +783,7 @@ async def test_flow_stream_rejects_data_after_response_eom(tctx):
             response = Response.make(200)
             response.raw_content = None
             stream.flow.response = response
-            return b""
+            return [None, b""]
         return b"late"
 
     stream.flow.stream = transform
@@ -708,7 +820,7 @@ def test_flow_stream_request_lifecycle(tctx):
                 response.headers.pop("content-length")
                 response.headers["transfer-encoding"] = "chunked"
                 flow.response = response
-                return b"response"
+                return [None, b"response"]
             if chunk == b"":
                 return b""
             return []
