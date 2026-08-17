@@ -194,6 +194,7 @@ def test_response_trailers(tctx: Context, open_h2_server_conn: Server, stream):
         )
         << http.HttpResponseHook(flow)
     )
+    assert flow().response.end_stream is True
     assert flow().response.trailers
     del flow().response.trailers["resp-trailer-a"]
     if stream:
@@ -265,6 +266,7 @@ def test_request_trailers(tctx: Context, open_h2_server_conn: Server, stream):
         hyperframe.frame.DataFrame,
         hyperframe.frame.HeadersFrame,
     ]
+    assert flow().request.end_stream is True
 
 
 def test_upstream_error(tctx):
@@ -676,6 +678,8 @@ def test_end_stream_via_headers(tctx, stream):
         hyperframe.frame.HeadersFrame,
     ]
     assert "END_STREAM" in frames[0].flags
+    assert flow().request.end_stream is True
+    assert flow().response.end_stream is True
 
 
 @pytest.mark.parametrize(

@@ -255,6 +255,19 @@ class Message(serializable.Serializable):
         self.data.set_state(state)
 
     data: MessageData
+    # Exposed for addon use; mitmproxy does not read this value internally.
+    end_stream: bool = False
+    """
+    Whether mitmproxy has received the end of this message stream, so that no
+    more body or trailers will follow. This may already be `True` in the
+    corresponding headers hook if the message ended with its initial headers.
+    Otherwise, it becomes `True` when mitmproxy receives the end of the
+    message after its body or trailers.
+
+    A value of `False` only means that the end of the message has not been
+    received yet. This transient value is available to addons from the
+    corresponding headers hook onward.
+    """
     stream: MessageStreamCallable | bool = False
     """
     This attribute controls if the message body should be streamed.

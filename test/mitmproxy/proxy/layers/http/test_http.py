@@ -66,6 +66,31 @@ def test_http_proxy(tctx):
     assert server().address == ("example.com", 80)
 
 
+@pytest.mark.parametrize(
+    ("request_headers", "end_stream"),
+    [
+        (
+            b"GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+            True,
+        ),
+        (
+            b"POST http://example.com/ HTTP/1.1\r\n"
+            b"Host: example.com\r\nContent-Length: 1\r\n\r\n",
+            False,
+        ),
+    ],
+)
+def test_requestheaders_exposes_end_stream(tctx, request_headers, end_stream):
+    flow = Placeholder(HTTPFlow)
+
+    assert (
+        Playbook(http.HttpLayer(tctx, HTTPMode.regular))
+        >> DataReceived(tctx.client, request_headers)
+        << http.HttpRequestHeadersHook(flow)
+    )
+    assert flow().request.end_stream is end_stream
+
+
 @pytest.mark.parametrize("strategy", ["lazy", "eager"])
 @pytest.mark.parametrize("http_connect_send_host_header", [True, False])
 def test_https_proxy(strategy, http_connect_send_host_header, tctx):
@@ -417,6 +442,7 @@ def test_response_streaming(tctx, why, transfer_encoding):
         tctx.options.stream_large_bodies = why.replace("body_size=", "")
 
     def enable_streaming(flow: HTTPFlow):
+        assert flow.response.end_stream is False
         if why == "addon":
             flow.response.stream = True
 
@@ -475,6 +501,7 @@ def test_response_streaming(tctx, why, transfer_encoding):
         playbook << SendData(tctx.client, b"0\r\n\r\n")
 
     assert playbook
+    assert flow().response.end_stream is True
     assert not flow().live
 
 
@@ -813,7 +840,7 @@ def test_flow_stream_request_lifecycle(tctx):
 
     def enable_streaming(flow: HTTPFlow) -> None:
         def transform(chunk):
-            seen.append(chunk)
+            seen.append((chunk, flow.request.end_stream))
             if chunk == b"abc":
                 response = Response.make(200)
                 response.raw_content = None
@@ -854,7 +881,7 @@ def test_flow_stream_request_lifecycle(tctx):
         >> reply()
     )
 
-    assert seen == [None, b"abc", b""]
+    assert seen == [(None, False), (b"abc", False), (b"", True)]
     assert flow().request.raw_content == b"abc"
     assert flow().response
     assert flow().response.raw_content == b"response"

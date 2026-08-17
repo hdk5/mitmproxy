@@ -203,8 +203,12 @@ class HttpStream(layer.Layer):
         elif isinstance(
             event, (RequestHeaders, RequestData, RequestTrailers, RequestEndOfMessage)
         ):
+            if isinstance(event, RequestEndOfMessage):
+                self.flow.request.end_stream = True
             yield from self.client_state(event)
         else:
+            if isinstance(event, ResponseEndOfMessage) and self.flow.response:
+                self.flow.response.end_stream = True
             yield from self.server_state(event)
 
     @expect(RequestHeaders)
@@ -217,6 +221,7 @@ class HttpStream(layer.Layer):
         else:
             self.flow = event.replay_flow
         self.flow.request = event.request
+        self.flow.request.end_stream = event.end_stream
         self.flow.live = True
 
         if (yield from self.check_invalid(True)):
@@ -597,6 +602,7 @@ class HttpStream(layer.Layer):
         self, event: ResponseHeaders
     ) -> layer.CommandGenerator[None]:
         self.flow.response = event.response
+        self.flow.response.end_stream = event.end_stream
 
         if not event.end_stream and (yield from self.check_body_size(False)):
             return
