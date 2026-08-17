@@ -13,6 +13,7 @@ from mitmproxy.flow import Error
 from mitmproxy.http import Headers
 from mitmproxy.http import HTTPFlow
 from mitmproxy.http import Request
+from mitmproxy.http import Response
 from mitmproxy.proxy.commands import Await
 from mitmproxy.proxy.commands import CloseConnection
 from mitmproxy.proxy.commands import Log
@@ -974,6 +975,115 @@ def test_awaiting_stream_does_not_block_sibling_stream(
     assert data_frame.stream_id == 1
     assert data_frame.data == b"transformed: body"
 
+    pending_awaitable().close()
+
+
+def test_flow_stream_error_resets_only_failing_h2_stream(
+    tctx: Context, open_h2_server_conn: Server
+):
+    playbook, cff = start_h2_client(tctx)
+    tctx.server = open_h2_server_conn
+
+    flow1 = Placeholder(HTTPFlow)
+    flow2 = Placeholder(HTTPFlow)
+    stream1_response = Placeholder(bytes)
+    stream1_reset = Placeholder(bytes)
+    stream2_request = Placeholder(bytes)
+    stream2_response = Placeholder(bytes)
+    pending_awaitable = Placeholder()
+    await_command = Await(pending_awaitable)
+
+    def enable_failing_stream(flow: HTTPFlow) -> None:
+        def transform(chunk: bytes | None):
+            if chunk is None:
+                response = Response.make(200)
+                response.raw_content = None
+                response.headers.clear()
+                flow.response = response
+                return [None, b"partial response"]
+
+            async def fail():
+                raise RuntimeError("upstream failed")
+
+            return fail()
+
+        flow.stream = transform
+
+    assert (
+        playbook
+        # Stream 1 starts a response, but keeps receiving its request body.
+        >> DataReceived(
+            tctx.client,
+            cff.build_headers_frame(example_request_headers, stream_id=1).serialize(),
+        )
+        << http.HttpRequestHeadersHook(flow1)
+        >> reply(side_effect=enable_failing_stream)
+        << http.HttpResponseHeadersHook(flow1)
+        >> reply()
+        << SendData(tctx.client, stream1_response)
+        # Processing the next request chunk pauses on the asynchronous addon code.
+        >> DataReceived(
+            tctx.client,
+            cff.build_data_frame(
+                b"request body", flags=["END_STREAM"], stream_id=1
+            ).serialize(),
+        )
+        << await_command
+        # Stream 3 can still proceed while stream 1 awaits the addon.
+        >> DataReceived(
+            tctx.client,
+            cff.build_headers_frame(
+                example_request_headers, flags=["END_STREAM"], stream_id=3
+            ).serialize(),
+        )
+        << http.HttpRequestHeadersHook(flow2)
+        >> reply()
+        << http.HttpRequestHook(flow2)
+        >> reply()
+        << SendData(tctx.server, stream2_request)
+        # The addon failure resets only stream 1.
+        >> reply((None, RuntimeError("upstream failed")), to=await_command)
+        << http.HttpErrorHook(flow1)
+        >> reply()
+        << SendData(tctx.client, stream1_reset)
+        # Stream 3 can receive and complete its response normally.
+        >> DataReceived(
+            tctx.server,
+            FrameFactory()
+            .build_headers_frame(
+                example_response_headers, flags=["END_STREAM"], stream_id=1
+            )
+            .serialize(),
+        )
+        << http.HttpResponseHeadersHook(flow2)
+        >> reply()
+        << http.HttpResponseHook(flow2)
+        >> reply()
+        << SendData(tctx.client, stream2_response)
+    )
+
+    response_headers, response_data = decode_frames(stream1_response())
+    assert isinstance(response_headers, hyperframe.frame.HeadersFrame)
+    assert response_headers.stream_id == 1
+    assert "END_STREAM" not in response_headers.flags
+    assert isinstance(response_data, hyperframe.frame.DataFrame)
+    assert response_data.stream_id == 1
+    assert response_data.data == b"partial response"
+    assert "END_STREAM" not in response_data.flags
+
+    (reset,) = decode_frames(stream1_reset())
+    assert isinstance(reset, hyperframe.frame.RstStreamFrame)
+    assert reset.stream_id == 1
+    assert reset.error_code == ErrorCodes.INTERNAL_ERROR
+
+    assert decode_frames(stream2_request())[-1].stream_id == 1
+    (response,) = decode_frames(stream2_response())
+    assert isinstance(response, hyperframe.frame.HeadersFrame)
+    assert response.stream_id == 3
+    assert "END_STREAM" in response.flags
+    assert flow1().error
+    assert flow1().error.msg == "HTTPFlow.stream failed: RuntimeError: upstream failed"
+    assert flow2().error is None
     pending_awaitable().close()
 
 

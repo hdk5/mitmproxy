@@ -311,7 +311,8 @@ class HttpStream(layer.Layer):
             )
         elif self.flow.stream:
             yield commands.Log("Streaming request to handler.")
-            yield from self.read_flow_stream(None)
+            if not (yield from self.read_flow_stream_or_error(None)):
+                return
         else:
             ok = yield from self.make_server_connection()
             if not ok:
@@ -429,6 +430,23 @@ class HttpStream(layer.Layer):
                 "the final stream(b'') call must yield b'' before returning."
             )
 
+    def read_flow_stream_or_error(
+        self, request_chunk: bytes | None
+    ) -> layer.CommandGenerator[bool]:
+        try:
+            yield from self.read_flow_stream(request_chunk)
+        except Exception as exc:
+            yield from self.handle_protocol_error(
+                ResponseProtocolError(
+                    self.stream_id,
+                    f"HTTPFlow.stream failed: {type(exc).__name__}: {exc}",
+                    ErrorCode.GENERIC_SERVER_ERROR,
+                )
+            )
+            self.client_state = self.server_state = self.state_errored
+            return False
+        return True
+
     def write_flow_stream(self, chunk: bytes | None) -> layer.CommandGenerator[None]:
         if self.server_state == self.state_done:
             raise ValueError(
@@ -512,7 +530,8 @@ class HttpStream(layer.Layer):
             if self.flow.stream:
                 if self.context.options.store_streamed_bodies:
                     self.request_body_buf += event.data
-                yield from self.read_flow_stream(event.data)
+                if not (yield from self.read_flow_stream_or_error(event.data)):
+                    return
             elif callable(self.flow.request.stream):
                 yield from self.read_request_stream(event.data)
             else:
@@ -524,7 +543,8 @@ class HttpStream(layer.Layer):
             self.flow.request.trailers = event.trailers
         elif isinstance(event, RequestEndOfMessage):
             if self.flow.stream:
-                yield from self.read_flow_stream(b"")
+                if not (yield from self.read_flow_stream_or_error(b"")):
+                    return
             elif callable(self.flow.request.stream):
                 yield from self.read_request_stream(b"")
 
