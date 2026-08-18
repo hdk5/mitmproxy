@@ -122,8 +122,15 @@ async def test_no_reentrancy(capsys):
     )
 
 
+@pytest.mark.parametrize(
+    ("command_type", "event_type"),
+    [
+        (commands.Await, events.AwaitCompleted),
+        (commands.StartTask, events.StartTaskCompleted),
+    ],
+)
 @pytest.mark.parametrize("outcome", ["result", "exception"])
-async def test_await_completion(outcome):
+async def test_await_completion(outcome, command_type, event_type):
     handler = MockConnectionHandler()
     handler.server_event = mock.AsyncMock()
     handler._drain_writers = mock.AsyncMock()
@@ -133,11 +140,11 @@ async def test_await_completion(outcome):
             raise RuntimeError("test error")
         return "result"
 
-    command = commands.Await(awaitable())
+    command = command_type(awaitable())
     await handler.await_command(command)
 
     completed = handler.server_event.await_args.args[0]
-    assert isinstance(completed, events.AwaitCompleted)
+    assert isinstance(completed, event_type)
     assert completed.command is command
     if outcome == "result":
         assert completed.reply == ("result", None)

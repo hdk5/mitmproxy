@@ -125,6 +125,12 @@ class AwaitCompleted(CommandCompleted, Generic[R]):
     reply: tuple[R, None] | tuple[None, Exception]
 
 
+@dataclass(repr=False)
+class StartTaskCompleted(CommandCompleted, Generic[R]):
+    command: commands.StartTask[R]
+    reply: tuple[R, None] | tuple[None, Exception]
+
+
 T = TypeVar("T")
 
 

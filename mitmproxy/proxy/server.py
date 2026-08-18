@@ -378,7 +378,12 @@ class ConnectionHandler(metaclass=abc.ABCMeta):
         else:
             reply = (result, None)
         async with self._drain_lock:
-            await self.server_event(events.AwaitCompleted(command, reply))
+            completed: events.CommandCompleted
+            if isinstance(command, commands.StartTask):
+                completed = events.StartTaskCompleted(command, reply)
+            else:
+                completed = events.AwaitCompleted(command, reply)
+            await self.server_event(completed)
             await self._drain_writers()
 
     @abc.abstractmethod

@@ -79,6 +79,12 @@ class Await(Command, Generic[R]):
                 raise error
 
 
+class StartTask(Await[R]):
+    """Run an awaitable without pausing the layer that issued the command."""
+
+    blocking = False
+
+
 class ConnectionCommand(Command):
     """
     Commands involving a specific connection

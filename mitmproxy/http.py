@@ -41,10 +41,7 @@ MessageStreamResult = bytes | Iterable[bytes] | AsyncIterable[bytes]
 MessageStreamCallable = Callable[
     [bytes], MessageStreamResult | Awaitable[MessageStreamResult]
 ]
-FlowStreamResult = bytes | None | Iterable[bytes | None] | AsyncIterable[bytes | None]
-FlowStreamCallable = Callable[
-    [bytes | None], FlowStreamResult | Awaitable[FlowStreamResult]
-]
+FlowStreamCallable = Callable[[AsyncIterable[bytes]], Awaitable[AsyncIterable[bytes]]]
 
 
 # While headers _should_ be ASCII, it's not uncommon for certain headers to be utf-8 encoded.
@@ -1246,27 +1243,18 @@ class HTTPFlow(flow.Flow):
     """The server's HTTP response."""
     stream: FlowStreamCallable | None = None
     """
-    Callback for custom request and response stream handling.
+    Asynchronous callback for custom request and response stream handling.
 
-    Called with `None` after `requestheaders`, with each request body chunk,
-    and with `b""` when the request ends. Returned bytes are sent as response
-    body chunks; `b""` marks the end of the response. Returning `None` is
-    equivalent to returning an empty iterable. A returned iterable may yield
-    `None` to send newly assigned response headers without sending body data.
-    The stream must yield `None` before yielding any response body data.
+    Called once after `requestheaders` with an asynchronous iterable of request
+    body chunks. Completion of the returned awaitable signals that newly
+    assigned response headers are ready and provides an asynchronous iterable
+    of response body chunks. The body iterable is consumed independently while
+    the request body is still arriving, and its completion ends the response.
 
-    If request or response body transformations are also configured, chunks
-    pass through them in this order: `request.stream`, `HTTPFlow.stream`, then
-    `response.stream`.
+    Request and response body transformations are not applied when this
+    callback is set.
 
-    Synchronous callbacks are evaluated inline by default. Decorate a callback
-    with `mitmproxy.script.run_in_thread` to evaluate it and its returned
-    synchronous iterable serially in worker threads. Async callbacks and async
-    iterables are awaited cooperatively without blocking other proxy
-    connections.
-
-    Set `response` before yielding any response value. The final call must end
-    the response unless it has already ended earlier.
+    Set `response` before the outer awaitable completes.
     """
     error: flow.Error | None = None
     """

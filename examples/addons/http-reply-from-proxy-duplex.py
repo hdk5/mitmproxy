@@ -1,9 +1,9 @@
-"""Handle a request and response as a bi-directional stream."""
+"""Handle a request and response as a bidirectional asynchronous stream."""
 
-from collections.abc import Iterable
+import asyncio
+from collections.abc import AsyncIterable
 
 from mitmproxy import http
-from mitmproxy.script import run_in_thread
 
 
 def requestheaders(flow: http.HTTPFlow) -> None:
@@ -14,69 +14,49 @@ def requestheaders(flow: http.HTTPFlow) -> None:
         """Start processing the request and its headers."""
         raise NotImplementedError()
 
-    def write_request(chunk: bytes) -> None:
+    async def write_request(chunk: bytes) -> None:
         """Process a request-body chunk."""
         raise NotImplementedError()
 
-    def finish_request() -> None:
-        """Finish processing the request body."""
+    async def finish_request() -> None:
+        """Finish the request after its body and trailers have arrived."""
         raise NotImplementedError()
 
-    def start_response(*, block: bool) -> http.Response | None:
-        """Return the response once it has started.
-
-        With ``block=False``, return immediately with ``None`` if the response
-        has not started yet. Otherwise, wait until the response starts.
-        """
+    async def start_response() -> http.Response:
+        """Wait until the response headers are available."""
         raise NotImplementedError()
 
-    def read_response(*, block: bool) -> Iterable[bytes]:
-        """Yield response-body chunks, followed by ``b""`` at response EOM.
-
-        With ``block=False``, yield currently available data and return without
-        waiting for more. Otherwise, wait for data and continue through
-        response EOM.
-        """
+    async def read_response() -> AsyncIterable[bytes]:
+        """Yield response-body chunks and set response trailers before returning."""
         raise NotImplementedError()
+        yield b""  # pragma: no cover
 
-    # mitmproxy calls this once when request headers are received (`None`), once
-    # for each request-body chunk, and once when the request ends (`b""`).
-    #
-    # Before request EOM, process the request data and return promptly: response
-    # data should only be yielded when it is already available. After request
-    # EOM, the returned iterable may block while waiting for the remainder of
-    # the response.
-    #
-    # Set flow.response before yielding any response data. Yielding b"" marks
-    # response EOM, but does not stop request processing: if the response ends
-    # early, stream() will still receive the remaining request data. Once
-    # request EOM has been received, the response must also be completed by
-    # yielding b"" unless it has already ended.
-    @run_in_thread
-    def stream(chunk: bytes | None) -> Iterable[bytes]:
-        if chunk is None:
-            # This is the first call, after request headers have been received.
-            start_request()
-        elif chunk == b"":
-            # This is the last call, after request EOM.
-            # Request trailers are also available in flow.request.trailers.
-            finish_request()
-        else:
-            # This is a request-body chunk.
-            write_request(chunk)
+    async def stream(request_body: AsyncIterable[bytes]) -> AsyncIterable[bytes]:
+        start_request()
 
-        block = chunk == b""
+        async def send_request() -> None:
+            async for chunk in request_body:
+                await write_request(chunk)
+            # Request trailers are now available in flow.request.trailers.
+            await finish_request()
 
-        if not flow.response:
-            response = start_response(block=block)
-            if response is None:
-                return []
-            if flow.request.is_http11:
-                response.headers["transfer-encoding"] = "chunked"
-                # or, alternatively:
-                # response.headers["content-length"] = "12345"
-            flow.response = response
+        request_task = asyncio.create_task(send_request())
+        try:
+            flow.response = await start_response()
+            flow.response.raw_content = None
 
-        return read_response(block=block)
+            async def response_body():
+                try:
+                    async for chunk in read_response():
+                        yield chunk
+                    # Set flow.response.trailers in read_response() before it returns.
+                finally:
+                    if not request_task.done():
+                        request_task.cancel()
+
+            return response_body()
+        except BaseException:
+            request_task.cancel()
+            raise
 
     flow.stream = stream

@@ -20,6 +20,7 @@ from mitmproxy.proxy.commands import Log
 from mitmproxy.proxy.commands import OpenConnection
 from mitmproxy.proxy.commands import RequestWakeup
 from mitmproxy.proxy.commands import SendData
+from mitmproxy.proxy.commands import StartTask
 from mitmproxy.proxy.context import Context
 from mitmproxy.proxy.events import ConnectionClosed
 from mitmproxy.proxy.events import DataReceived
@@ -978,7 +979,7 @@ def test_awaiting_stream_does_not_block_sibling_stream(
     pending_awaitable().close()
 
 
-def test_flow_stream_error_resets_only_failing_h2_stream(
+async def test_flow_stream_error_resets_only_failing_h2_stream(
     tctx: Context, open_h2_server_conn: Server
 ):
     playbook, cff = start_h2_client(tctx)
@@ -986,50 +987,56 @@ def test_flow_stream_error_resets_only_failing_h2_stream(
 
     flow1 = Placeholder(HTTPFlow)
     flow2 = Placeholder(HTTPFlow)
-    stream1_response = Placeholder(bytes)
+    stream1_response_headers = Placeholder(bytes)
+    stream1_response_data = Placeholder(bytes)
     stream1_reset = Placeholder(bytes)
     stream2_request = Placeholder(bytes)
     stream2_response = Placeholder(bytes)
-    pending_awaitable = Placeholder()
-    await_command = Await(pending_awaitable)
+    response_start = Placeholder()
+    response_body = Placeholder()
+    response_error = Placeholder()
+    response_start_task = StartTask(response_start)
+    response_body_task = StartTask(response_body)
+    response_error_task = StartTask(response_error)
 
     def enable_failing_stream(flow: HTTPFlow) -> None:
-        def transform(chunk: bytes | None):
-            if chunk is None:
-                response = Response.make(200)
-                response.raw_content = None
-                response.headers.clear()
-                flow.response = response
-                return [None, b"partial response"]
-
-            async def fail():
-                raise RuntimeError("upstream failed")
-
-            return fail()
+        async def transform(_request_body):
+            raise AssertionError("playbook replies to StartTask directly")
 
         flow.stream = transform
 
+    async def body():
+        if False:
+            yield b""
+
+    body_iter = body()
+
+    def start_response(_command) -> None:
+        response = Response.make(200)
+        response.raw_content = None
+        response.headers.clear()
+        flow1().response = response
+
     assert (
         playbook
-        # Stream 1 starts a response, but keeps receiving its request body.
+        # Stream 1 starts a response while its request body remains open.
         >> DataReceived(
             tctx.client,
             cff.build_headers_frame(example_request_headers, stream_id=1).serialize(),
         )
         << http.HttpRequestHeadersHook(flow1)
         >> reply(side_effect=enable_failing_stream)
+        << Log("Streaming request to handler.")
+        << response_start_task
+        >> reply((body_iter, None), to=response_start_task, side_effect=start_response)
         << http.HttpResponseHeadersHook(flow1)
         >> reply()
-        << SendData(tctx.client, stream1_response)
-        # Processing the next request chunk pauses on the asynchronous addon code.
-        >> DataReceived(
-            tctx.client,
-            cff.build_data_frame(
-                b"request body", flags=["END_STREAM"], stream_id=1
-            ).serialize(),
-        )
-        << await_command
-        # Stream 3 can still proceed while stream 1 awaits the addon.
+        << SendData(tctx.client, stream1_response_headers)
+        << response_body_task
+        >> reply((b"partial response", None), to=response_body_task)
+        << SendData(tctx.client, stream1_response_data)
+        << response_error_task
+        # Stream 3 can still proceed while stream 1 awaits more response data.
         >> DataReceived(
             tctx.client,
             cff.build_headers_frame(
@@ -1042,7 +1049,7 @@ def test_flow_stream_error_resets_only_failing_h2_stream(
         >> reply()
         << SendData(tctx.server, stream2_request)
         # The addon failure resets only stream 1.
-        >> reply((None, RuntimeError("upstream failed")), to=await_command)
+        >> reply((None, RuntimeError("upstream failed")), to=response_error_task)
         << http.HttpErrorHook(flow1)
         >> reply()
         << SendData(tctx.client, stream1_reset)
@@ -1062,10 +1069,11 @@ def test_flow_stream_error_resets_only_failing_h2_stream(
         << SendData(tctx.client, stream2_response)
     )
 
-    response_headers, response_data = decode_frames(stream1_response())
+    (response_headers,) = decode_frames(stream1_response_headers())
     assert isinstance(response_headers, hyperframe.frame.HeadersFrame)
     assert response_headers.stream_id == 1
     assert "END_STREAM" not in response_headers.flags
+    (response_data,) = decode_frames(stream1_response_data())
     assert isinstance(response_data, hyperframe.frame.DataFrame)
     assert response_data.stream_id == 1
     assert response_data.data == b"partial response"
@@ -1084,7 +1092,10 @@ def test_flow_stream_error_resets_only_failing_h2_stream(
     assert flow1().error
     assert flow1().error.msg == "HTTPFlow.stream failed: RuntimeError: upstream failed"
     assert flow2().error is None
-    pending_awaitable().close()
+    response_start().close()
+    response_body().close()
+    response_error().close()
+    await body_iter.aclose()
 
 
 def test_max_concurrency(tctx):
